@@ -3,6 +3,15 @@
 #include <iostream>
 
 int main() {
+	if (OFXGGML_AGENTS_VERSION_MAJOR != 1 ||
+		OFXGGML_AGENTS_VERSION_MINOR != 0 ||
+		OFXGGML_AGENTS_VERSION_PATCH != 1 ||
+		std::string(OFXGGML_AGENTS_VERSION_STRING) != "1.0.1" ||
+		std::string(ofxGgmlAgentsGetVersionString()) != "1.0.1") {
+		std::cerr << "unexpected Agents addon version metadata\n";
+		return 1;
+	}
+
 	ofxGgmlAgentsRequest request;
 	if (ofxGgmlAgentsUtils::hasInput(request)) {
 		std::cerr << "empty request reported as configured\n";

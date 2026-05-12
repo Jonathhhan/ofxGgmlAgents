@@ -1,0 +1,10 @@
+#pragma once
+
+#define OFXGGML_AGENTS_VERSION_MAJOR 1
+#define OFXGGML_AGENTS_VERSION_MINOR 0
+#define OFXGGML_AGENTS_VERSION_PATCH 1
+#define OFXGGML_AGENTS_VERSION_STRING "1.0.1"
+
+inline const char * ofxGgmlAgentsGetVersionString() {
+	return OFXGGML_AGENTS_VERSION_STRING;
+}
