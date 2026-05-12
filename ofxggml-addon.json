@@ -1,0 +1,23 @@
+{
+  "name": "ofxGgmlAgents",
+  "lane": "agents",
+  "coreBaseline": "v1.0.1",
+  "requires": [
+    "ofxGgmlCore"
+  ],
+  "owns": [
+    "tool use",
+    "planning loops",
+    "agent orchestration",
+    "local agents"
+  ],
+  "platforms": [
+    "windows",
+    "macos",
+    "linux"
+  ],
+  "backends": [
+    "cpu",
+    "cuda"
+  ]
+}
