@@ -20,6 +20,9 @@ No dependency should point from `ofxGgmlCore` back to `ofxGgmlAgents`.
 - focused root-level examples
 - local model/tool workflow documentation
 
+See `docs/AGENT_WORKFLOWS.md` for the planning handoff and workflow-boundary
+rules used before source-level agent behavior is expanded.
+
 ## Not Owned Here
 
 - ggml runtime setup and backend selection

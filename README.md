@@ -19,6 +19,14 @@ Current addon API version: `1.0.1`.
 
 `ofxGgmlAgentsPlannerExample` is a root-level planning request smoke test. Generate it with the openFrameworks projectGenerator using addons `ofxGgmlAgents`, `ofxGgmlCore`, and `ofxImGui`.
 
+## Agent workflow planning
+
+Use [`docs/AGENT_WORKFLOWS.md`](docs/AGENT_WORKFLOWS.md) before expanding this
+lane. It defines which planning, tool-use, and handoff responsibilities belong
+in `ofxGgmlAgents`, which model-specific behavior stays in companion addons,
+and how Codex, GitHub Copilot, or Hermes Agent should scope a repository
+change.
+
 ## Dependencies
 
 - openFrameworks
