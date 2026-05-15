@@ -68,19 +68,6 @@ Assert-FileContains (Join-Path $exampleRoot "addons.make") "(?m)^ofxImGui\s*$" "
 Assert-Path (Join-Path $exampleRoot "src\main.cpp") "smoke example main.cpp"
 Assert-Path (Join-Path $exampleRoot "src\ofApp.h") "smoke example ofApp.h"
 Assert-Path (Join-Path $exampleRoot "src\ofApp.cpp") "smoke example ofApp.cpp"
-$codexExampleRoot = Join-Path $addonRoot "ofxGgmlAgentsCodexLocalExample"
-Assert-Path $codexExampleRoot "root-level local Codex example" -Directory
-Assert-Path (Join-Path $codexExampleRoot "addons.make") "local Codex example addons.make"
-Assert-FileContains (Join-Path $codexExampleRoot "addons.make") "(?m)^ofxGgmlAgents\s*$" "local Codex example addons.make"
-Assert-FileContains (Join-Path $codexExampleRoot "addons.make") "(?m)^ofxImGui\s*$" "local Codex example addons.make"
-Assert-Path (Join-Path $codexExampleRoot "README.md") "local Codex example README"
-Assert-FileContains (Join-Path $codexExampleRoot "README.md") "plan-local-codex.bat" "local Codex example README"
-Assert-Path (Join-Path $codexExampleRoot "codex-config.example.toml") "local Codex example config"
-Assert-FileContains (Join-Path $codexExampleRoot "codex-config.example.toml") 'wire_api = "responses"' "local Codex example config"
-Assert-Path (Join-Path $codexExampleRoot "src\main.cpp") "local Codex example main.cpp"
-Assert-Path (Join-Path $codexExampleRoot "src\ofApp.h") "local Codex example ofApp.h"
-Assert-Path (Join-Path $codexExampleRoot "src\ofApp.cpp") "local Codex example ofApp.cpp"
-Assert-FileContains (Join-Path $codexExampleRoot "src\ofApp.cpp") 'wire_api = \\"responses\\"' "local Codex example source"
 Assert-Path (Join-Path $addonRoot "tests\CMakeLists.txt") "test CMakeLists"
 Assert-Path (Join-Path $addonRoot "tests\test_main.cpp") "test source"
 Assert-Path (Join-Path $scriptRoot "doctor-agents.ps1") "Agents doctor script"
@@ -104,9 +91,6 @@ $forbidden = @(
 	"ofxGgmlAgentsPlannerExample\bin",
 	"ofxGgmlAgentsPlannerExample\obj",
 	"ofxGgmlAgentsPlannerExample\.vs",
-	"ofxGgmlAgentsCodexLocalExample\bin",
-	"ofxGgmlAgentsCodexLocalExample\obj",
-	"ofxGgmlAgentsCodexLocalExample\.vs",
 	"models"
 )
 

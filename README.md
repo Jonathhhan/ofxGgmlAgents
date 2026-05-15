@@ -19,10 +19,6 @@ Current addon API version: `1.0.1`.
 
 `ofxGgmlAgentsPlannerExample` is a root-level planning request smoke test. Generate it with the openFrameworks projectGenerator using addons `ofxGgmlAgents`, `ofxGgmlCore`, and `ofxImGui`.
 
-`ofxGgmlAgentsCodexLocalExample` is a root-level local Codex handoff example.
-It shows the `llama-server` endpoint contract and Codex provider/profile config
-shape for using a local model prepared by `ofxGgmlLlama`.
-
 ## Agent workflow planning
 
 Use [`docs/AGENT_WORKFLOWS.md`](docs/AGENT_WORKFLOWS.md) before expanding this
@@ -33,6 +29,8 @@ change.
 
 For local LLM provider handoff from an `ofxGgmlLlama` `llama-server`, see
 [`docs/LOCAL_LLM_ENDPOINTS.md`](docs/LOCAL_LLM_ENDPOINTS.md).
+The concrete OpenAI Codex + llama.cpp setup example lives in
+`ofxGgmlLlama/ofxGgmlLlamaCodexLocalExample`.
 
 ## Dependencies
 

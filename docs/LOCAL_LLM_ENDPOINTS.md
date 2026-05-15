@@ -33,10 +33,10 @@ The backing server should expose chat/completion endpoints compatible with the
 client being used by the coding assistant. Agents docs and examples should avoid
 hardcoding model paths or llama.cpp binary locations.
 
-`ofxGgmlAgentsCodexLocalExample` shows this handoff as a projectGenerator-ready
-openFrameworks example. It reads `OFXGGML_AGENT_LLM_BASE_URL` and
-`OFXGGML_AGENT_LLM_MODEL`, then displays the endpoint and Codex provider/profile
-shape without starting servers or editing local config.
+The concrete OpenAI Codex + llama.cpp setup example is maintained in
+`ofxGgmlLlama/ofxGgmlLlamaCodexLocalExample`, where the owning addon can show
+build, model, server, and Codex provider/profile setup together. Agents docs
+should reference that example instead of duplicating llama.cpp runtime setup.
 
 ## Handoff record
 
