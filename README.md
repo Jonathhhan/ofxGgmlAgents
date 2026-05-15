@@ -37,6 +37,7 @@ change.
 
 ```powershell
 scripts\doctor-agents.bat
+scripts\run-agents-runtime-smoke.bat -Json -SummaryOnly
 scripts\validate-local.bat
 ```
 
@@ -44,8 +45,16 @@ On macOS/Linux:
 
 ```sh
 ./scripts/doctor-agents.sh
+./scripts/run-agents-runtime-smoke.sh -Json -SummaryOnly
 ./scripts/validate-local.sh
 ```
+
+`scripts\run-agents-runtime-smoke.*` is the lane-owned runtime-smoke entrypoint
+for ecosystem planning and CI rollouts. It currently proves the deterministic
+planning request/helper boundary and doctor readiness without claiming
+model-backed agent loops, tool execution, memory handoff, or RAG integration.
+Add runtime checks here only after the local model backend, tool registry,
+memory/index paths, companion-addon handoffs, and cleanup rules are explicit.
 
 ## Boundary
 
