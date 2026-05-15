@@ -27,6 +27,9 @@ in `ofxGgmlAgents`, which model-specific behavior stays in companion addons,
 and how Codex, GitHub Copilot, or Hermes Agent should scope a repository
 change.
 
+For local LLM provider handoff from an `ofxGgmlLlama` `llama-server`, see
+[`docs/LOCAL_LLM_ENDPOINTS.md`](docs/LOCAL_LLM_ENDPOINTS.md).
+
 ## Dependencies
 
 - openFrameworks
@@ -58,4 +61,8 @@ memory/index paths, companion-addon handoffs, and cleanup rules are explicit.
 
 ## Boundary
 
-Keep agent-specific planning, tool registry, orchestration, memory handoff, model launch, and examples here. Move code down into `ofxGgmlCore` only when it becomes a stable, domain-neutral primitive with focused tests.
+Keep agent-specific planning, tool registry, orchestration, memory handoff,
+provider endpoint handoff, and examples here. Model launch and model-specific
+runtime setup stay in the owning companion addon. Move code down into
+`ofxGgmlCore` only when it becomes a stable, domain-neutral primitive with
+focused tests.

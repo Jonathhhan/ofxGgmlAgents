@@ -12,6 +12,7 @@ This addon may define:
 - tool registry concepts and tool-call boundaries
 - local execution loop documentation
 - example prompts and handoff records
+- local LLM endpoint handoff records
 - validation checks for agent workflow structure
 - integration notes for companion addons that expose tools
 
@@ -22,6 +23,7 @@ Keep these responsibilities out of `ofxGgmlAgents`:
 - ggml setup, backend selection, and runtime discovery
 - text, audio, vision, video, diffusion, segmentation, music, or RAG model UX
 - model downloads, model caches, embeddings indexes, or generated media
+- llama.cpp builds, `llama-server` startup, or GGUF model discovery
 - generic result, tensor, graph, or metadata primitives that belong in
   `ofxGgmlCore`
 - reusable GitHub Actions policy, which belongs in `ofxGgmlWorkflows`
@@ -48,6 +50,11 @@ Companion tools needed:
 Out of scope:
 Validation:
 ```
+
+For local LLM provider handoff from `ofxGgmlLlama`, use
+[`LOCAL_LLM_ENDPOINTS.md`](LOCAL_LLM_ENDPOINTS.md). Agents may record the
+OpenAI-compatible base URL and model alias, but llama.cpp build, model download,
+and `llama-server` lifecycle remain owned by `ofxGgmlLlama`.
 
 ## Validation ladder
 
