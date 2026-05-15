@@ -74,6 +74,10 @@ Assert-Path (Join-Path $scriptRoot "doctor-agents.ps1") "Agents doctor script"
 Assert-Path (Join-Path $scriptRoot "doctor-agents.bat") "Agents doctor Windows wrapper"
 Assert-Path (Join-Path $scriptRoot "doctor-agents.sh") "Agents doctor shell wrapper"
 Assert-Path (Join-Path $scriptRoot "test-doctor-agents.ps1") "Agents doctor smoke test"
+Assert-Path (Join-Path $scriptRoot "run-agents-runtime-smoke.ps1") "Agents runtime smoke script"
+Assert-Path (Join-Path $scriptRoot "run-agents-runtime-smoke.bat") "Agents runtime smoke Windows wrapper"
+Assert-Path (Join-Path $scriptRoot "run-agents-runtime-smoke.sh") "Agents runtime smoke shell wrapper"
+Assert-Path (Join-Path $scriptRoot "test-agents-runtime-smoke.ps1") "Agents runtime smoke contract test"
 
 $nestedExamples = Join-Path $addonRoot "examples"
 if (Test-Path -LiteralPath $nestedExamples -PathType Container) {
@@ -102,6 +106,9 @@ Write-Step "Checking Agents doctor"
 if (!$?) {
 	throw "Agents doctor smoke test failed"
 }
+
+Write-Step "Checking Agents runtime smoke contract"
+& (Join-Path $scriptRoot "test-agents-runtime-smoke.ps1")
 
 Write-Step "Running headless tests"
 & (Join-Path $scriptRoot "test-addon.ps1")

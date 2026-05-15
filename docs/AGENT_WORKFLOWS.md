@@ -49,6 +49,24 @@ Out of scope:
 Validation:
 ```
 
+## Validation ladder
+
+Use the smallest command that proves the changed layer:
+
+| Change type | Suggested validation |
+| --- | --- |
+| Docs or planning only | `scripts\validate-local.bat` |
+| Local setup diagnosis | `scripts\doctor-agents.bat` |
+| Request/result/helper changes | `scripts\test-addon.bat` |
+| Ecosystem runtime smoke evidence | `scripts\run-agents-runtime-smoke.bat -Json -SummaryOnly` |
+| Example layout changes | `scripts\validate-local.bat` |
+
+`scripts\run-agents-runtime-smoke.*` is intentionally planning-boundary-only
+until this addon owns a real local model runner, tool registry, execution loop,
+or memory handoff. It compiles and runs the deterministic helper tests, checks
+doctor readiness, and emits JSON for Core planning without downloading models,
+running tools, mutating memory indexes, or invoking companion-addon workflows.
+
 ## Safe first tasks
 
 Good early tasks for this lane are:
