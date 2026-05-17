@@ -68,11 +68,13 @@ Use the smallest command that proves the changed layer:
 | Ecosystem runtime smoke evidence | `scripts\run-agents-runtime-smoke.bat -Json -SummaryOnly` |
 | Example layout changes | `scripts\validate-local.bat` |
 
-`scripts\run-agents-runtime-smoke.*` is intentionally planning-boundary-only
-until this addon owns a real local model runner, tool registry, execution loop,
-or memory handoff. It compiles and runs the deterministic helper tests, checks
-doctor readiness, and emits JSON for Core planning without downloading models,
-running tools, mutating memory indexes, or invoking companion-addon workflows.
+`scripts\run-agents-runtime-smoke.*` now includes an optional endpoint-backed
+inference check when `OFXGGML_AGENT_LLM_BASE_URL` and
+`OFXGGML_AGENT_LLM_MODEL` are configured. Without those values it remains
+planning-boundary. It compiles and runs the deterministic helper tests, checks
+doctor readiness, and emits JSON for Core planning. The optional smoke can be
+disabled by leaving endpoint values empty, or used locally by running against an
+already-started OpenAI-compatible server.
 
 ## Safe first tasks
 

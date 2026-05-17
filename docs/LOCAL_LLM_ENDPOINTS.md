@@ -107,3 +107,15 @@ scripts\run-llama-runtime-smoke.bat -Backend cuda -Json -SummaryOnly
 
 Use `-Backend cpu` for CPU-only validation. Only after that should an agent
 workflow claim model-backed local LLM readiness.
+
+You can additionally validate the agent smoke contract directly from this lane:
+
+```powershell
+cd ..\ofxGgmlAgents
+set OFXGGML_AGENT_LLM_BASE_URL=http://127.0.0.1:8001/v1
+set OFXGGML_AGENT_LLM_MODEL=unsloth/GLM-4.7-Flash
+scripts\run-agents-runtime-smoke.bat -Json -SummaryOnly -OutputPath .agents-runtime-smoke.json
+```
+
+When the endpoint returns the smoke token, Core will classify this lane as
+`inference-checked` in `plan-backend-runtime-verification`.
