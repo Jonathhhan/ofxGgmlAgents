@@ -4,6 +4,11 @@
 ecosystem. This document is for Codex, GitHub Copilot, Hermes Agent, and
 humans planning agent work before addon runtime code exists.
 
+Treat this addon as the internal agent lane. External coding-client config for
+Codex or OpenCode can live beside the local llama.cpp endpoint in
+`ofxGgmlLlama`; reusable agent loops, tool registries, memory handoff, and
+cross-addon orchestration live here.
+
 ## Owned workflow surface
 
 This addon may define:

@@ -4,6 +4,11 @@
 
 `ofxGgmlCore` stays the dependency. This addon owns agent-specific workflow code so core can stay small and boring.
 
+This is the internal agent lane for the ofxGgml ecosystem: planning loops, tool
+registries, memory handoff, and addon-to-addon orchestration live here. Llama.cpp
+server startup, GGUF model discovery, and client-specific Codex/OpenCode config
+snippets remain in `ofxGgmlLlama`, where the local text endpoint is owned.
+
 Family map: https://jonathhhan.github.io/ofxGgmlCore/
 
 Current addon API version: `1.0.1`.
