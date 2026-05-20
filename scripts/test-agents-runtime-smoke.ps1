@@ -40,6 +40,7 @@ try {
 	$textOutput = & $script -DryRun 2>&1 6>&1 | Out-String
 	Assert-Contains $textOutput "ofxGgmlAgents runtime smoke plan" "runtime smoke dry-run"
 	Assert-Contains $textOutput "Backend: planning-boundary" "runtime smoke dry-run"
+	Assert-Contains $textOutput "HermesInstalled:" "runtime smoke dry-run"
 	Assert-Contains $textOutput "ModelBacked: False" "runtime smoke dry-run"
 	Assert-Contains $textOutput "EndpointConfigured: False" "runtime smoke dry-run"
 	Assert-Contains $textOutput "ToolExecutionBacked: False" "runtime smoke dry-run"
@@ -56,6 +57,9 @@ try {
 	}
 	if ($summary.ModelBacked -or $summary.ToolExecutionBacked) {
 		throw "Agents runtime smoke should not claim model-backed or tool-execution-backed runtime yet."
+	}
+	if ($null -eq $summary.HermesInstalled) {
+		throw "Runtime dry-run summary did not include HermesInstalled."
 	}
 	if ($summary.ModelPath) {
 		throw "Runtime dry-run summary should not include model path when endpoint is not configured."

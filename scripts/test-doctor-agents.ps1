@@ -15,6 +15,7 @@ foreach ($expected in @(
 	"planner example",
 	"agent request types",
 	"agent goal",
+	"Hermes root",
 	"artifact hygiene"
 )) {
 	if ($text -notmatch [regex]::Escape($expected)) {
@@ -33,4 +34,7 @@ if ([string]::IsNullOrWhiteSpace([string]$parsed.Root)) {
 }
 if (!$parsed.Checks -or $parsed.Checks.Count -eq 0) {
 	throw "doctor JSON output did not include checks."
+}
+if ($null -eq $parsed.HermesRoot) {
+	throw "doctor JSON output did not include HermesRoot."
 }

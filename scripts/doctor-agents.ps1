@@ -3,6 +3,7 @@ param(
 	[string]$Prompt = $(if ($env:OFXGGML_AGENTS_PROMPT) { $env:OFXGGML_AGENTS_PROMPT } else { "" }),
 	[string]$Model = $(if ($env:OFXGGML_AGENTS_MODEL) { $env:OFXGGML_AGENTS_MODEL } else { "" }),
 	[string]$Tools = $(if ($env:OFXGGML_AGENTS_TOOLS) { $env:OFXGGML_AGENTS_TOOLS } else { "" }),
+	[string]$HermesRoot = $(if ($env:HERMES_HOME) { $env:HERMES_HOME } elseif ($env:LOCALAPPDATA) { Join-Path $env:LOCALAPPDATA "hermes" } else { "" }),
 	[switch]$Json,
 	[switch]$Strict
 )
@@ -64,6 +65,22 @@ function Test-ConfiguredFile {
 	}
 	$expanded = [Environment]::ExpandEnvironmentVariables($Path)
 	if (Test-Path -LiteralPath $expanded -PathType Leaf) {
+		return New-Check "OK" $Name $expanded
+	}
+	return New-Check "WARN" $Name "configured path was not found: $expanded"
+}
+
+function Test-ConfiguredDirectory {
+	param(
+		[string]$Path,
+		[string]$Name,
+		[string]$Hint
+	)
+	if ([string]::IsNullOrWhiteSpace($Path)) {
+		return New-Check "WARN" $Name $Hint
+	}
+	$expanded = [Environment]::ExpandEnvironmentVariables($Path)
+	if (Test-Path -LiteralPath $expanded -PathType Container) {
 		return New-Check "OK" $Name $expanded
 	}
 	return New-Check "WARN" $Name "configured path was not found: $expanded"
@@ -145,6 +162,28 @@ if (![string]::IsNullOrWhiteSpace($Tools)) {
 	$checks += New-Check "WARN" "agent tools" "set OFXGGML_AGENTS_TOOLS with semicolon-separated tool names when available"
 }
 
+$expandedHermesRoot = if ([string]::IsNullOrWhiteSpace($HermesRoot)) { "" } else { [Environment]::ExpandEnvironmentVariables($HermesRoot) }
+$checks += Test-ConfiguredDirectory `
+	-Path $expandedHermesRoot `
+	-Name "Hermes root" `
+	-Hint "set HERMES_HOME or install Hermes under LOCALAPPDATA\hermes"
+if (![string]::IsNullOrWhiteSpace($expandedHermesRoot) -and (Test-Path -LiteralPath $expandedHermesRoot -PathType Container)) {
+	$checks += Test-PathCheck `
+		-Path (Join-Path $expandedHermesRoot "hermes-agent") `
+		-Name "Hermes agent repo" `
+		-MissingDetail "Hermes root exists but hermes-agent was not found" `
+		-Directory
+	$checks += Test-PathCheck `
+		-Path (Join-Path $expandedHermesRoot "config.yaml") `
+		-Name "Hermes config" `
+		-MissingDetail "Hermes root exists but config.yaml was not found"
+	$checks += Test-PathCheck `
+		-Path (Join-Path $expandedHermesRoot "memories") `
+		-Name "Hermes memory store" `
+		-MissingDetail "Hermes root exists but memories directory was not found" `
+		-Directory
+}
+
 $artifactWarnings = @()
 foreach ($relative in @(
 	"build",
@@ -168,6 +207,7 @@ if ($artifactWarnings.Count -eq 0) {
 if ($Json) {
 	[pscustomobject]@{
 		Root = $addonRoot.Path
+		HermesRoot = $expandedHermesRoot
 		Warnings = $script:Warnings
 		Checks = $checks
 	} | ConvertTo-Json -Depth 5

@@ -61,6 +61,32 @@ For local LLM provider handoff from `ofxGgmlLlama`, use
 OpenAI-compatible base URL and model alias, but llama.cpp build, model download,
 and `llama-server` lifecycle remain owned by `ofxGgmlLlama`.
 
+## Hermes handoff
+
+Hermes Agent may be installed outside the addon tree, commonly under
+`%LOCALAPPDATA%\hermes` on Windows or the path declared by `HERMES_HOME`. This
+addon treats that installation as an external agent client, not as vendored
+source. `scripts\doctor-agents.*` detects the Hermes root, `hermes-agent`
+checkout, `config.yaml`, and memory directory without reading or copying API
+keys, sessions, caches, logs, memories, or skills into the repository.
+
+Use the Hermes handoff when the user wants Hermes to participate in planning:
+
+```text
+Workflow: Hermes-assisted addon planning
+User goal: <goal>
+Repository touched: ofxGgmlAgents or owning companion addon
+Hermes root: %LOCALAPPDATA%\hermes or HERMES_HOME
+Companion tools needed: <addon-owned tool/model lanes>
+Out of scope: Hermes caches, sessions, memories, skills, API keys, model files
+Validation: scripts\doctor-agents.bat; scripts\run-agents-runtime-smoke.bat -Json -SummaryOnly
+```
+
+Do not add Hermes runtime dependencies to `ofxGgmlCore`. If a Hermes task needs
+model-backed inference, pass an already-started OpenAI-compatible endpoint via
+`OFXGGML_AGENT_LLM_BASE_URL` and `OFXGGML_AGENT_LLM_MODEL`; endpoint ownership
+still belongs to the model companion addon.
+
 ## Validation ladder
 
 Use the smallest command that proves the changed layer:

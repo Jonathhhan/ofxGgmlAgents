@@ -6,6 +6,7 @@ param(
 	[string]$Prompt = "Reply with exactly OFXGGML_AGENTS_SMOKE_OK",
 	[int]$TimeoutSeconds = 30,
 	[string]$ApiKey = $(if ($env:OFXGGML_AGENT_LLM_API_KEY) { $env:OFXGGML_AGENT_LLM_API_KEY } else { "" }),
+	[string]$HermesRoot = $(if ($env:HERMES_HOME) { $env:HERMES_HOME } elseif ($env:LOCALAPPDATA) { Join-Path $env:LOCALAPPDATA "hermes" } else { "" }),
 	[string]$OutputPath = "",
 	[switch]$Clean,
 	[switch]$DryRun,
@@ -77,6 +78,10 @@ function Test-RuntimeSmokeReady {
 function New-DryRunSummary {
 	$ready = Test-RuntimeSmokeReady
 	$endpointConfigured = !([string]::IsNullOrWhiteSpace($ServerBaseUrl) -or [string]::IsNullOrWhiteSpace($Model))
+	$expandedHermesRoot = if ([string]::IsNullOrWhiteSpace($HermesRoot)) { "" } else { [Environment]::ExpandEnvironmentVariables($HermesRoot) }
+	$hermesInstalled = ![string]::IsNullOrWhiteSpace($expandedHermesRoot) -and
+		(Test-Path -LiteralPath $expandedHermesRoot -PathType Container) -and
+		(Test-Path -LiteralPath (Join-Path $expandedHermesRoot "hermes-agent") -PathType Container)
 
 	return [ordered]@{
 		Name = "ofxGgmlAgents runtime smoke"
@@ -84,6 +89,8 @@ function New-DryRunSummary {
 		Backend = "planning-boundary"
 		BuildDir = $BuildDir
 		Ready = $ready
+		HermesInstalled = [bool]$hermesInstalled
+		HermesRoot = $expandedHermesRoot
 		ModelBacked = [bool]$endpointConfigured
 		ToolExecutionBacked = $false
 		EndpointConfigured = [bool]$endpointConfigured
@@ -257,6 +264,7 @@ if ($DryRun) {
 	Write-Host "  Backend: $($summary.Backend)"
 	Write-Host "  BuildDir: $($summary.BuildDir)"
 	Write-Host "  Ready: $($summary.Ready)"
+	Write-Host "  HermesInstalled: $($summary.HermesInstalled)"
 	Write-Host "  ModelBacked: $($summary.ModelBacked)"
 	Write-Host "  ToolExecutionBacked: $($summary.ToolExecutionBacked)"
 	Write-Host "  EndpointConfigured: $($summary.EndpointConfigured)"
@@ -291,6 +299,10 @@ $doctorArgs = @(
 	$doctorScript,
 	"-Json"
 )
+if (![string]::IsNullOrWhiteSpace($HermesRoot)) {
+	$doctorArgs += "-HermesRoot"
+	$doctorArgs += $HermesRoot
+}
 
 $results = @()
 $results += Invoke-SmokeStep -Name "planning helper tests" -Arguments $testArgs
@@ -336,6 +348,10 @@ $summary = [ordered]@{
 	ModelBacked = [bool]$modelBacked
 	ToolExecutionBacked = $false
 	InferenceChecked = [bool]$inferenceChecked
+	HermesInstalled = ![string]::IsNullOrWhiteSpace($HermesRoot) -and
+		(Test-Path -LiteralPath ([Environment]::ExpandEnvironmentVariables($HermesRoot)) -PathType Container) -and
+		(Test-Path -LiteralPath (Join-Path ([Environment]::ExpandEnvironmentVariables($HermesRoot)) "hermes-agent") -PathType Container)
+	HermesRoot = if ([string]::IsNullOrWhiteSpace($HermesRoot)) { "" } else { [Environment]::ExpandEnvironmentVariables($HermesRoot) }
 	SmokeKind = $smokeKind
 	ModelPath = [string]$modelPath
 	ResultCount = $results.Count
@@ -354,6 +370,8 @@ if ($Json) {
 				SmokeKind = [string]$summary.SmokeKind
 				Backend = [string]$summary.Backend
 				ModelPath = [string]$summary.ModelPath
+				HermesInstalled = [bool]$summary.HermesInstalled
+				HermesRoot = [string]$summary.HermesRoot
 			}
 			Error = [string]$summary.Error
 			NextCommands = @(
