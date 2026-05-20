@@ -11,6 +11,13 @@
     "agent orchestration",
     "local agents"
   ],
+  "features": [
+    "planning-boundary runtime smoke",
+    "Hermes Agent environment detection",
+    "tool orchestration workflow boundary",
+    "OpenAI-compatible endpoint smoke option",
+    "local coding-agent handoff planning"
+  ],
   "platforms": [
     "windows",
     "macos",
