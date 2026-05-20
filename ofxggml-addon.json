@@ -19,6 +19,5 @@
   "backends": [
     "cpu",
     "cuda"
-  ],
-  "inferenceSmokeReport": ".agents-runtime-smoke.json"
+  ]
 }
