@@ -13,6 +13,14 @@ Family map: https://jonathhhan.github.io/ofxGgmlCore/
 
 Current addon API version: `1.0.1`.
 
+## Features
+
+- planning-boundary runtime smoke
+- Hermes Agent environment detection
+- tool orchestration workflow boundary
+- OpenAI-compatible endpoint smoke option
+- local coding-agent handoff planning
+
 ## First Milestone
 
 - define small request/result types
