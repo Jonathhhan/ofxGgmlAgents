@@ -116,4 +116,18 @@ if ($LASTEXITCODE -ne 0) {
 	throw "Headless tests failed with exit code $LASTEXITCODE"
 }
 
-Write-Step "ofxGgmlAgents local validation passed"
+
+Write-Step "Checking workflow callers"
+$callerWorkflows = @("release-check.yml", "backend-runtime-check.yml", "release-gate.yml")
+$workflowDir = Join-Path $addonRoot ".github\workflows"
+foreach ($wf in $callerWorkflows) {
+    $wfPath = Join-Path $workflowDir $wf
+    if (!(Test-Path -LiteralPath $wfPath -PathType Leaf)) {
+        throw "Workflow caller not found: $wfPath"
+    }
+    $content = Get-Content -LiteralPath $wfPath -Raw
+    if ($content -notmatch 'uses:.*ofxGgmlWorkflows') {
+        throw "Workflow caller $wf does not reference ofxGgmlWorkflows reusable workflow"
+    }
+}
+Write-Step 'ofxGgmlAgents local validation passed'

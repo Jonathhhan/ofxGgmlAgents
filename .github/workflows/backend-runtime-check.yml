@@ -1,0 +1,14 @@
+name: backend-runtime-check
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  backend-runtime-check:
+    uses: Jonathhhan/ofxGgmlWorkflows/.github/workflows/backend-runtime-check.yml@main
+    with:
+      require_cuda: false
+      require_metal: false
+      require_vulkan: false
