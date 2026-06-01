@@ -49,13 +49,20 @@ macOS/Linux:
 ./scripts/release-candidate.sh
 ```
 
+The release readiness score should stay lane-specific. It should check Agents
+docs, doctor/runtime-smoke scripts, and example handoff files instead of
+requiring llama.cpp build scripts or text-generation examples owned by companion
+addons.
+
 ## Example Scope
 
 `ofxGgmlAgentsPlannerExample` is intentionally narrow in this release:
 
 - root-level openFrameworks example
 - `ofxImGui` dependency declared in `addons.make`
-- planning request smoke surface
+- planning request smoke surface with selectable workflow scenarios
+- copyable and loggable planning handoff records
+- explicit companion-tool ownership and out-of-scope runtime work
 - clear future path for local models, tools, memory, and orchestration loops
 
 This release does not promise a complete model-backed agent runtime.

@@ -30,7 +30,11 @@ Current addon API version: `1.0.1`.
 
 ## Example
 
-`ofxGgmlAgentsPlannerExample` is a root-level planning request smoke test. Generate it with the openFrameworks projectGenerator using addons `ofxGgmlAgents`, `ofxGgmlCore`, and `ofxImGui`.
+`ofxGgmlAgentsPlannerExample` is a root-level planning request smoke test. It
+shows sample agent workflow handoffs, companion-tool ownership, validation
+commands, and explicit out-of-scope runtime work without starting local models
+or executing tools. Generate it with the openFrameworks projectGenerator using
+addons `ofxGgmlAgents`, `ofxGgmlCore`, and `ofxImGui`.
 
 ## Agent workflow planning
 
@@ -44,6 +48,9 @@ For local LLM provider handoff from an `ofxGgmlLlama` `llama-server`, see
 [`docs/LOCAL_LLM_ENDPOINTS.md`](docs/LOCAL_LLM_ENDPOINTS.md).
 The concrete OpenAI Codex + llama.cpp setup example lives in
 `ofxGgmlLlama/ofxGgmlLlamaCodexLocalExample`.
+`ofxGgmlAgentsCodexLocalExample` is kept only as a handoff pointer for local
+workspaces; it should not grow llama.cpp startup, model download, or
+client-specific provider setup here.
 
 Hermes Agent is treated as an external planning client. If it is installed at
 `%LOCALAPPDATA%\hermes` or `HERMES_HOME`, `scripts\doctor-agents.*` reports the

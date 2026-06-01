@@ -17,6 +17,7 @@
                      "tool orchestration workflow boundary",
                      "OpenAI-compatible endpoint smoke option",
                      "local coding-agent handoff planning",
+                     "copyable planner example handoff records",
                      "release readiness scoring",
                      "workflow caller: release-check",
                      "workflow caller: backend-runtime-check",

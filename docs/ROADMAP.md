@@ -3,7 +3,8 @@
 ## Current Milestone
 
 - Seed the companion addon skeleton.
-- Keep `ofxGgmlAgentsPlannerExample` as the first root-level smoke example.
+- Keep `ofxGgmlAgentsPlannerExample` as the first root-level smoke example with
+  copyable planning handoff records.
 - Keep `ofxGgmlCore` as the only required library dependency; examples may depend on `ofxImGui`.
 - Add local validation and headless tests.
 - Add independent addon version metadata and release-candidate docs.

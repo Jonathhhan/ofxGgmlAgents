@@ -23,14 +23,14 @@ try {
         @{ Category="release_docs"; Name="RELEASE_POLICY.md"; Weight=1; Test={ Test-PathLeaf "docs\RELEASE_POLICY.md" } },
         @{ Category="release_docs"; Name="RELEASE_CHECKLIST.md"; Weight=1; Test={ Test-PathLeaf "docs\RELEASE_CHECKLIST.md" } },
         @{ Category="release_docs"; Name="RELEASE_NOTES_TEMPLATE.md"; Weight=1; Test={ Test-PathLeaf "docs\RELEASE_NOTES_TEMPLATE.md" } },
-        @{ Category="release_docs"; Name="MIGRATION.md"; Weight=1; Test={ Test-PathLeaf "docs\MIGRATION.md" } },
+        @{ Category="release_docs"; Name="LOCAL_LLM_ENDPOINTS.md"; Weight=1; Test={ Test-PathLeaf "docs\LOCAL_LLM_ENDPOINTS.md" } },
         @{ Category="addon_structure"; Name="addon_config.mk"; Weight=2; Test={ Test-PathLeaf "addon_config.mk" } },
         @{ Category="addon_structure"; Name="README.md"; Weight=2; Test={ Test-PathLeaf "README.md" } },
         @{ Category="addon_structure"; Name="LICENSE"; Weight=1; Test={ Test-PathLeaf "LICENSE" } },
         @{ Category="addon_structure"; Name="ofxggml-addon.json"; Weight=2; Test={ Test-PathLeaf "ofxggml-addon.json" } },
         @{ Category="scripts"; Name="validate-local.ps1"; Weight=2; Test={ Test-PathLeaf "scripts\validate-local.ps1" } },
-        @{ Category="scripts"; Name="build-llama-server.ps1"; Weight=1; Test={ Test-PathLeaf "scripts\build-llama-server.ps1" } },
-        @{ Category="scripts"; Name="run-llama-runtime-smoke.ps1"; Weight=2; Test={ Test-PathLeaf "scripts\run-llama-runtime-smoke.ps1" } },
+        @{ Category="scripts"; Name="doctor-agents.ps1"; Weight=1; Test={ Test-PathLeaf "scripts\doctor-agents.ps1" } },
+        @{ Category="scripts"; Name="run-agents-runtime-smoke.ps1"; Weight=2; Test={ Test-PathLeaf "scripts\run-agents-runtime-smoke.ps1" } },
         @{ Category="scripts"; Name="release-candidate.ps1"; Weight=1; Test={ Test-PathLeaf "scripts\release-candidate.ps1" } },
         @{ Category="workflows"; Name="addon-hygiene.yml"; Weight=1; Test={ Test-PathLeaf ".github\workflows\addon-hygiene.yml" } },
         @{ Category="workflows"; Name="coding-agent-instructions.yml"; Weight=1; Test={ Test-PathLeaf ".github\workflows\coding-agent-instructions.yml" } },
@@ -39,10 +39,10 @@ try {
         @{ Category="workflows"; Name="backend-runtime-check.yml"; Weight=1; Test={ Test-PathLeaf ".github\workflows\backend-runtime-check.yml" } },
         @{ Category="tests"; Name="CMakeLists.txt"; Weight=2; Test={ Test-PathLeaf "tests\CMakeLists.txt" } },
         @{ Category="tests"; Name="test_main.cpp"; Weight=2; Test={ Test-PathLeaf "tests\test_main.cpp" } },
-        @{ Category="examples"; Name="ofxGgmlTextExample"; Weight=1; Test={ Test-PathDir "ofxGgmlTextExample" } },
-        @{ Category="examples"; Name="ofxGgmlAgentsCodexLocalExample"; Weight=1; Test={ Test-PathDir "ofxGgmlAgentsCodexLocalExample" } },
+        @{ Category="examples"; Name="ofxGgmlAgentsPlannerExample README"; Weight=1; Test={ Test-PathLeaf "ofxGgmlAgentsPlannerExample\README.md" } },
+        @{ Category="examples"; Name="ofxGgmlAgentsCodexLocalExample handoff README"; Weight=1; Test={ Test-PathLeaf "ofxGgmlAgentsCodexLocalExample\README.md" } },
         @{ Category="examples"; Name="ofxGgmlAgentsPlannerExample"; Weight=1; Test={ Test-PathDir "ofxGgmlAgentsPlannerExample" } },
-        @{ Category="examples"; Name="ofxGgmlAgentsCodexLocalExample"; Weight=1; Test={ Test-PathDir "ofxGgmlAgentsCodexLocalExample" } },
+        @{ Category="examples"; Name="ofxGgmlAgentsCodexLocalExample handoff pointer"; Weight=1; Test={ Test-PathDir "ofxGgmlAgentsCodexLocalExample" } },
         @{ Category="hygiene"; Name="gitignore_build"; Weight=1; Test={ (Get-Content ".gitignore" -Raw) -match "build/" } },
         @{ Category="hygiene"; Name="gitignore_binaries"; Weight=1; Test={ $ig = (Get-Content ".gitignore" -Raw); $ig -match "\.exe" -and $ig -match "\.dll" } },
         @{ Category="hygiene"; Name="gitignore_models"; Weight=1; Test={ (Get-Content ".gitignore" -Raw) -match "models/" } }
@@ -65,8 +65,10 @@ try {
         MaxScore = $maxScore
         Percentage = $percentage
         Grade = $grade
-        Checks = $checks.ToArray()
         Generated = (Get-Date).ToUniversalTime().ToString("o")
+    }
+    if (!$SummaryOnly) {
+        $result.Checks = $checks.ToArray()
     }
 
     if ($Json) {
@@ -82,15 +84,19 @@ try {
         Write-Host "ofxGgmlAgents release readiness score"
         Write-Host "Score:      $score/$maxScore ($percentage%)"
         Write-Host "Grade:      $grade"
-        foreach ($check in $checks) {
-            $icon = if ($check.Passed) { "PASS" } else { "FAIL" }
-            Write-Host "  [$icon] $($check.Category)/$($check.Name) (weight $($check.Weight))"
+        if (!$SummaryOnly) {
+            foreach ($check in $checks) {
+                $icon = if ($check.Passed) { "PASS" } else { "FAIL" }
+                Write-Host "  [$icon] $($check.Category)/$($check.Name) (weight $($check.Weight))"
+            }
         }
         if (![string]::IsNullOrWhiteSpace($OutputPath)) {
             $mdLines = @("# Release Readiness Score", "", "**Addon:** ofxGgmlAgents", "**Score:** $score/$maxScore ($percentage%)", "**Grade:** $grade", "**Generated:** $($result.Generated)", "")
-            foreach ($check in $checks) {
-                $icon = if ($check.Passed) { ":white_check_mark:" } else { ":x:" }
-                $mdLines += "$icon **$($check.Category)/$($check.Name)** (weight $($check.Weight))"
+            if (!$SummaryOnly) {
+                foreach ($check in $checks) {
+                    $icon = if ($check.Passed) { ":white_check_mark:" } else { ":x:" }
+                    $mdLines += "$icon **$($check.Category)/$($check.Name)** (weight $($check.Weight))"
+                }
             }
             $mdLines += ""
             $mdPath = if ([System.IO.Path]::IsPathRooted($OutputPath)) { $OutputPath } else { Join-Path $addonRoot $OutputPath }

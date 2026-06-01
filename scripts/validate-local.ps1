@@ -62,18 +62,42 @@ Assert-Path (Join-Path $addonsRoot "ofxImGui") "sibling ofxImGui addon for examp
 
 Write-Step "Checking example layout"
 $exampleRoot = Join-Path $addonRoot "ofxGgmlAgentsPlannerExample"
+$codexExampleRoot = Join-Path $addonRoot "ofxGgmlAgentsCodexLocalExample"
 Assert-Path $exampleRoot "root-level smoke example" -Directory
+Assert-Path $codexExampleRoot "Codex local handoff pointer" -Directory
 Assert-Path (Join-Path $exampleRoot "addons.make") "smoke example addons.make"
 Assert-FileContains (Join-Path $exampleRoot "addons.make") "(?m)^ofxImGui\s*$" "smoke example addons.make"
 Assert-Path (Join-Path $exampleRoot "src\main.cpp") "smoke example main.cpp"
 Assert-Path (Join-Path $exampleRoot "src\ofApp.h") "smoke example ofApp.h"
 Assert-Path (Join-Path $exampleRoot "src\ofApp.cpp") "smoke example ofApp.cpp"
+$exampleAppSource = Join-Path $exampleRoot "src\ofApp.cpp"
+$exampleReadme = Join-Path $exampleRoot "README.md"
+Assert-Path $exampleReadme "smoke example README"
+Assert-FileContains $exampleAppSource "Copy handoff" "smoke example handoff UI"
+Assert-FileContains $exampleAppSource "Log handoff" "smoke example handoff UI"
+Assert-FileContains $exampleAppSource "Workflow:" "smoke example handoff template"
+Assert-FileContains $exampleAppSource "Out of scope:" "smoke example handoff template"
+Assert-FileContains $exampleAppSource "ofLogNotice" "smoke example logging"
+Assert-FileContains $exampleAppSource "OFXGGML_AGENT_LLM_BASE_URL" "smoke example endpoint handoff"
+Assert-FileContains $exampleAppSource "OFXGGML_AGENT_LLM_MODEL" "smoke example endpoint handoff"
+Assert-FileContains $exampleAppSource "API key: " "smoke example endpoint handoff"
+Assert-FileContains $exampleAppSource "value hidden" "smoke example endpoint handoff"
+Assert-FileContains $exampleReadme "Copy handoff" "smoke example README"
+Assert-FileContains $exampleReadme "Endpoint tab" "smoke example README"
+Assert-FileContains $exampleReadme "API key" "smoke example README"
+Assert-FileContains $exampleReadme "docs/AGENT_WORKFLOWS.md" "smoke example README"
+$codexExampleReadme = Join-Path $codexExampleRoot "README.md"
+Assert-Path $codexExampleReadme "Codex local handoff README"
+Assert-FileContains $codexExampleReadme "handoff pointer" "Codex local handoff README"
+Assert-FileContains $codexExampleReadme "ofxGgmlLlama/ofxGgmlLlamaCodexLocalExample" "Codex local handoff README"
+Assert-FileContains $codexExampleReadme "should stay out of git" "Codex local handoff README"
 Assert-Path (Join-Path $addonRoot "tests\CMakeLists.txt") "test CMakeLists"
 Assert-Path (Join-Path $addonRoot "tests\test_main.cpp") "test source"
 Assert-Path (Join-Path $scriptRoot "doctor-agents.ps1") "Agents doctor script"
 Assert-Path (Join-Path $scriptRoot "doctor-agents.bat") "Agents doctor Windows wrapper"
 Assert-Path (Join-Path $scriptRoot "doctor-agents.sh") "Agents doctor shell wrapper"
 Assert-Path (Join-Path $scriptRoot "test-doctor-agents.ps1") "Agents doctor smoke test"
+Assert-Path (Join-Path $scriptRoot "test-release-readiness-score.ps1") "release readiness score contract test"
 Assert-Path (Join-Path $scriptRoot "run-agents-runtime-smoke.ps1") "Agents runtime smoke script"
 Assert-Path (Join-Path $scriptRoot "run-agents-runtime-smoke.bat") "Agents runtime smoke Windows wrapper"
 Assert-Path (Join-Path $scriptRoot "run-agents-runtime-smoke.sh") "Agents runtime smoke shell wrapper"
@@ -100,6 +124,23 @@ foreach ($relative in $forbidden) {
 		throw "Generated or local-only path is tracked and should not be committed here: $relative"
 	}
 }
+
+Write-Step "Checking release readiness metadata"
+$readinessOutput = & (Join-Path $scriptRoot "generate-release-readiness-score.ps1") -Json -SummaryOnly 2>&1
+if (!$?) {
+	throw "Release readiness scoring failed."
+}
+$readiness = ($readinessOutput | Out-String) | ConvertFrom-Json
+$addonMetadata = Get-Content -LiteralPath (Join-Path $addonRoot "ofxggml-addon.json") -Raw | ConvertFrom-Json
+if ([int]$addonMetadata.releaseReadinessScore -ne [int]$readiness.Score) {
+	throw "ofxggml-addon.json releaseReadinessScore is $($addonMetadata.releaseReadinessScore), expected $($readiness.Score)."
+}
+if ([int]$addonMetadata.releaseReadinessMax -ne [int]$readiness.MaxScore) {
+	throw "ofxggml-addon.json releaseReadinessMax is $($addonMetadata.releaseReadinessMax), expected $($readiness.MaxScore)."
+}
+
+Write-Step "Checking release readiness score contract"
+& (Join-Path $scriptRoot "test-release-readiness-score.ps1")
 
 Write-Step "Checking Agents doctor"
 & (Join-Path $scriptRoot "test-doctor-agents.ps1")
