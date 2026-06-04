@@ -38,7 +38,7 @@ $summary = $summaryJson | ConvertFrom-Json
 if ($summary.Addon -ne "ofxGgmlAgents") {
 	throw "Unexpected release readiness addon: $($summary.Addon)"
 }
-if ($summary.Score -ne 35 -or $summary.MaxScore -ne 35) {
+if ($summary.Score -ne 36 -or $summary.MaxScore -ne 36) {
 	throw "Unexpected release readiness score: $($summary.Score)/$($summary.MaxScore)"
 }
 if ($summary.PSObject.Properties.Name -contains "Checks") {
@@ -61,7 +61,7 @@ if (!($detail.Checks.Name -contains "ofxGgmlAgentsCodexLocalExample handoff READ
 Write-Step "Release readiness text summary"
 $summaryText = & $script -SummaryOnly 2>&1 6>&1 | Out-String
 Assert-Contains $summaryText "ofxGgmlAgents release readiness score" "release readiness text summary"
-Assert-Contains $summaryText "Score:      35/35" "release readiness text summary"
+Assert-Contains $summaryText "Score:      36/36" "release readiness text summary"
 Assert-NotContains $summaryText "[PASS]" "release readiness text summary"
 
 Write-Step "Release readiness contract passed"

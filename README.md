@@ -38,6 +38,10 @@ addons `ofxGgmlAgents`, `ofxGgmlCore`, and `ofxImGui`.
 
 ## Agent workflow planning
 
+For a fresh checkout, see [`docs/QUICKSTART.md`](docs/QUICKSTART.md). It covers
+the clone, validation, projectGenerator, and model-handoff path from a new
+user's point of view.
+
 Use [`docs/AGENT_WORKFLOWS.md`](docs/AGENT_WORKFLOWS.md) before expanding this
 lane. It defines which planning, tool-use, and handoff responsibilities belong
 in `ofxGgmlAgents`, which model-specific behavior stays in companion addons,

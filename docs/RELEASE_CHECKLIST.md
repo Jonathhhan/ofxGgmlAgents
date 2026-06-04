@@ -73,6 +73,8 @@ This release does not promise a complete model-backed agent runtime.
 - no model files, generated memory/index files, generated OF project files, or
   build outputs are staged
 - `CHANGELOG.md` has an entry for the release
+- `docs/QUICKSTART.md` covers the fresh clone, validation, example generation,
+  and model-handoff path
 - `docs/releases/vX.Y.Z.md` matches the release scope
 - release notes distinguish request/helper skeleton work from future runtime
   adapters

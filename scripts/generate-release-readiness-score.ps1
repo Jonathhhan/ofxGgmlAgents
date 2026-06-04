@@ -23,6 +23,7 @@ try {
         @{ Category="release_docs"; Name="RELEASE_POLICY.md"; Weight=1; Test={ Test-PathLeaf "docs\RELEASE_POLICY.md" } },
         @{ Category="release_docs"; Name="RELEASE_CHECKLIST.md"; Weight=1; Test={ Test-PathLeaf "docs\RELEASE_CHECKLIST.md" } },
         @{ Category="release_docs"; Name="RELEASE_NOTES_TEMPLATE.md"; Weight=1; Test={ Test-PathLeaf "docs\RELEASE_NOTES_TEMPLATE.md" } },
+        @{ Category="release_docs"; Name="QUICKSTART.md"; Weight=1; Test={ Test-PathLeaf "docs\QUICKSTART.md" } },
         @{ Category="release_docs"; Name="LOCAL_LLM_ENDPOINTS.md"; Weight=1; Test={ Test-PathLeaf "docs\LOCAL_LLM_ENDPOINTS.md" } },
         @{ Category="addon_structure"; Name="addon_config.mk"; Weight=2; Test={ Test-PathLeaf "addon_config.mk" } },
         @{ Category="addon_structure"; Name="README.md"; Weight=2; Test={ Test-PathLeaf "README.md" } },

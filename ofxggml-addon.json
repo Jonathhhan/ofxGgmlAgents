@@ -32,6 +32,6 @@
                      "cpu",
                      "cuda"
                  ],
-    "releaseReadinessScore":  35,
-    "releaseReadinessMax":  35
+    "releaseReadinessScore":  36,
+    "releaseReadinessMax":  36
 }
