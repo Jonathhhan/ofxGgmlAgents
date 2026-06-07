@@ -62,6 +62,7 @@ Assert-FileContains (Join-Path $addonRoot "src\ofxGgmlAgentsVersion.h") "OFXGGML
 Assert-Path (Join-Path $addonRoot "src\ofxGgmlAgents\ofxGgmlAgentsTypes.h") "types header"
 Assert-Path (Join-Path $addonRoot "src\ofxGgmlAgents\ofxGgmlAgentsUtils.h") "utility header"
 Assert-Path (Join-Path $addonRoot "src\ofxGgmlAgents\ofxGgmlAgentsUtils.cpp") "utility source"
+Assert-FileContains (Join-Path $addonRoot "src\ofxGgmlAgents\ofxGgmlAgentsUtils.h") "meaningful planning input" "utility header"
 
 Write-Step "Checking dependency layout"
 Assert-Path (Join-Path $addonsRoot "ofxGgmlCore") "sibling ofxGgmlCore addon" -Directory

@@ -9,9 +9,9 @@
 - Add local validation and headless tests.
 - Add independent addon version metadata and release-candidate docs.
 - Document the `clone -> setup -> run` path from a new user's point of view.
+- Add focused tests around request/result helpers.
 
 ## Next Milestones
 
 - Connect the first real local backend or bridge adapter.
 - Add one useful openFrameworks example that runs with user-provided local models and tools.
-- Add focused tests around request/result helpers.
