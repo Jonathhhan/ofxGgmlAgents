@@ -71,6 +71,24 @@ try {
 		throw "JSON dry-run did not include the runnable evidence command."
 	}
 
+	Write-Step "Agents runtime smoke tool-call normalization"
+	$ecosystemFixture = Join-Path ([System.IO.Path]::GetTempPath()) "ofxGgmlAgents-ecosystem-fixture.yaml"
+	Set-Content -LiteralPath $ecosystemFixture -Value "development_order:`n  - lane: proven_lane`n    status: proven`n  - lane: planned_lane`n    status: planned"
+	$fixtureCases = @(
+		@{ Name = "structured-tool-calls"; First = @{ choices = @(@{ message = @{ role = "assistant"; content = ""; tool_calls = @(@{ id = "call_1"; type = "function"; function = @{ name = "get_proven_lanes"; arguments = "{}" } }) } }) } },
+		@{ Name = "json-in-content"; First = @{ choices = @(@{ message = @{ role = "assistant"; content = '{"name":"get_proven_lanes","arguments":{}}' } }) } }
+	)
+	foreach ($fixtureCase in $fixtureCases) {
+		$responseFixture = Join-Path ([System.IO.Path]::GetTempPath()) "ofxGgmlAgents-$($fixtureCase.Name)-fixture.json"
+		@($fixtureCase.First, @{ choices = @(@{ message = @{ role = "assistant"; content = "OFXGGML_AGENTS_TOOL_OK" } }) }) | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $responseFixture
+		$fixtureOutput = & $script -ServerBaseUrl "http://fixture.invalid" -Model "fixture-model" -EnableTools -RequireEndpoint -RequireToolExecution -EcosystemPath $ecosystemFixture -ResponseFixturePath $responseFixture -Json -SummaryOnly 2>&1 6>&1 | Out-String
+		$fixtureSummary = $fixtureOutput | ConvertFrom-Json
+		if (!$fixtureSummary.Summary.Passed -or !$fixtureSummary.Summary.ToolExecutionBacked) { throw "$($fixtureCase.Name) fixture did not prove tool execution.`n$fixtureOutput" }
+		if ($fixtureSummary.Summary.ToolCallEncoding -ne $fixtureCase.Name) { throw "Unexpected tool encoding: $($fixtureSummary.Summary.ToolCallEncoding)" }
+		Remove-Item -LiteralPath $responseFixture -Force
+	}
+	Remove-Item -LiteralPath $ecosystemFixture -Force
+
 	Write-Step "Agents runtime smoke contract passed"
 } finally {
 	Restore-Environment

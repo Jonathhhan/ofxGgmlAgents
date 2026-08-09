@@ -107,6 +107,14 @@ doctor readiness, and emits JSON for Core planning. The optional smoke can be
 disabled by leaving endpoint values empty, or used locally by running against an
 already-started OpenAI-compatible server.
 
+Pass `-EnableTools -RequireEndpoint -RequireToolExecution` to require the
+smallest runtime-capability path: the model requests the allowlisted,
+read-only `get_proven_lanes` tool; the runner reads the canonical sibling
+`ofxGgmlWorkflows/ecosystem.yaml`, returns the proven lanes, and requires the
+model to finish with `OFXGGML_AGENTS_TOOL_OK`. Both structured `tool_calls` and
+the JSON-in-assistant-content representation are normalized. No other tool
+name or tool arguments are accepted.
+
 ## Safe first tasks
 
 Good early tasks for this lane are:

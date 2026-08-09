@@ -86,11 +86,20 @@ On macOS/Linux:
 ```
 
 `scripts\run-agents-runtime-smoke.*` is the lane-owned runtime-smoke entrypoint
-for ecosystem planning and CI rollouts. It currently proves the deterministic
-planning request/helper boundary and doctor readiness without claiming
-model-backed agent loops, tool execution, memory handoff, or RAG integration.
-Add runtime checks here only after the local model backend, tool registry,
-memory/index paths, companion-addon handoffs, and cleanup rules are explicit.
+for ecosystem planning and CI rollouts. Its default behavior continues to prove
+the deterministic planning request/helper boundary and doctor readiness. An
+explicit opt-in proves one model-backed, read-only tool loop against an already
+running OpenAI-compatible endpoint:
+
+```powershell
+scripts\run-agents-runtime-smoke.bat -ServerBaseUrl http://127.0.0.1:11434 -Model qwen2.5-coder:7b -EnableTools -RequireEndpoint -RequireToolExecution -Json -SummaryOnly
+```
+
+The only allowlisted tool is `get_proven_lanes`; it reads the canonical sibling
+`ofxGgmlWorkflows/ecosystem.yaml`. Override discovery with
+`-EcosystemPath` or `OFXGGML_AGENT_ECOSYSTEM_PATH`. The runner accepts both
+OpenAI `tool_calls` and a JSON `{name, arguments}` object in assistant content.
+It does not write the manifest or expose arbitrary filesystem access.
 
 ## Boundary
 
@@ -99,3 +108,7 @@ provider endpoint handoff, and examples here. Model launch and model-specific
 runtime setup stay in the owning companion addon. Move code down into
 `ofxGgmlCore` only when it becomes a stable, domain-neutral primitive with
 focused tests.
+
+`ofxGgmlAgentsPlannerExample` provides the interactive counterpart to the
+runtime smoke: its Endpoint tab explicitly runs the same single allowlisted,
+read-only `get_proven_lanes` loop while remaining offline until clicked.

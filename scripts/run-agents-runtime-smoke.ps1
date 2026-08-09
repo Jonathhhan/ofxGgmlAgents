@@ -8,11 +8,15 @@ param(
 	[string]$ApiKey = $(if ($env:OFXGGML_AGENT_LLM_API_KEY) { $env:OFXGGML_AGENT_LLM_API_KEY } else { "" }),
 	[string]$HermesRoot = $(if ($env:HERMES_HOME) { $env:HERMES_HOME } elseif ($env:LOCALAPPDATA) { Join-Path $env:LOCALAPPDATA "hermes" } else { "" }),
 	[string]$OutputPath = "",
+	[string]$EcosystemPath = $(if ($env:OFXGGML_AGENT_ECOSYSTEM_PATH) { $env:OFXGGML_AGENT_ECOSYSTEM_PATH } else { "" }),
+	[string]$ResponseFixturePath = "",
 	[switch]$Clean,
 	[switch]$DryRun,
 	[switch]$Json,
 	[switch]$SummaryOnly,
-	[switch]$RequireEndpoint
+	[switch]$RequireEndpoint,
+	[switch]$EnableTools,
+	[switch]$RequireToolExecution
 )
 
 $ErrorActionPreference = "Stop"
@@ -182,107 +186,105 @@ function Resolve-AgentEndpoint {
 	return "$normalized/v1/chat/completions"
 }
 
+function Resolve-EcosystemPath {
+	param([string]$ConfiguredPath)
+	if (![string]::IsNullOrWhiteSpace($ConfiguredPath)) { return [System.IO.Path]::GetFullPath($ConfiguredPath) }
+	$dotGitPath = Join-Path $addonRoot ".git"
+	if (Test-Path -LiteralPath $dotGitPath -PathType Leaf) {
+		$dotGit = (Get-Content -LiteralPath $dotGitPath -Raw).Trim()
+		if ($dotGit -match "^gitdir:\s*(.+)$") {
+			$gitDir = [System.IO.Path]::GetFullPath($Matches[1])
+			$canonicalAddonRoot = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $gitDir))
+			return Join-Path (Split-Path -Parent $canonicalAddonRoot) "ofxGgmlWorkflows\ecosystem.yaml"
+		}
+	}
+	return Join-Path $addonsRoot "ofxGgmlWorkflows\ecosystem.yaml"
+}
+
+function Get-ProvenLanes {
+	param([string]$Path)
+	if (!(Test-Path -LiteralPath $Path -PathType Leaf)) { throw "Canonical ecosystem file was not found: $Path" }
+	$lanes = @()
+	$currentLane = ""
+	foreach ($line in (Get-Content -LiteralPath $Path)) {
+		if ($line -match '^\s+lane:\s*(\S+)\s*$') { $currentLane = $Matches[1] }
+		elseif ($line -match '^\s+status:\s*proven\s*$' -and $currentLane) {
+			$lanes += $currentLane
+			$currentLane = ""
+		}
+	}
+	return @($lanes | Select-Object -Unique)
+}
+
+function Get-NormalizedToolCall {
+	param($Message)
+	if ($Message.tool_calls -is [array] -and $Message.tool_calls.Count -gt 0) {
+		$call = $Message.tool_calls[0]
+		return [ordered]@{ Id = [string]$call.id; Name = [string]$call.function.name; Arguments = [string]$call.function.arguments; Encoding = "structured-tool-calls" }
+	}
+	try {
+		$decoded = ([string]$Message.content).Trim() | ConvertFrom-Json -ErrorAction Stop
+		if ($decoded.name) {
+			return [ordered]@{ Id = ""; Name = [string]$decoded.name; Arguments = ($decoded.arguments | ConvertTo-Json -Compress -Depth 10); Encoding = "json-in-content" }
+		}
+	} catch {}
+	return $null
+}
+
 function Invoke-AgentEndpointSmoke {
-	param(
-		[string]$BaseUrl,
-		[string]$Model,
-		[string]$Prompt,
-		[string]$ApiKey,
-		[int]$TimeoutSeconds
-	)
+	param([string]$BaseUrl, [string]$Model, [string]$Prompt, [string]$ApiKey, [int]$TimeoutSeconds,
+		[bool]$ToolsEnabled, [string]$EcosystemPath, [string]$ResponseFixturePath)
 
 	$endpoint = Resolve-AgentEndpoint -BaseUrl $BaseUrl
-	if ([string]::IsNullOrWhiteSpace($endpoint)) {
-		return [ordered]@{
-			Passed = $false
-			ExitCode = 2
-			Error = "agent model endpoint was not configured"
-			SmokeKind = "openai-compatible-chat"
-			Backend = "openai-compatible"
-			ModelPath = "<not-configured>"
-			ElapsedMs = 0
-			ResponseText = ""
-		}
+	if ([string]::IsNullOrWhiteSpace($endpoint) -or [string]::IsNullOrWhiteSpace($Model)) {
+		return [ordered]@{ Passed = $false; ExitCode = 2; Error = "agent endpoint and model alias are required"; SmokeKind = "openai-compatible-chat"; Backend = "openai-compatible"; ModelPath = "<not-configured>"; ElapsedMs = 0; ResponseText = ""; ToolExecutionBacked = $false }
 	}
-	if ([string]::IsNullOrWhiteSpace($Model)) {
-		return [ordered]@{
-			Passed = $false
-			ExitCode = 2
-			Error = "agent model alias is required"
-			SmokeKind = "openai-compatible-chat"
-			Backend = "openai-compatible"
-			ModelPath = "<not-configured>"
-			ElapsedMs = 0
-			ResponseText = ""
-		}
+	$messages = @(
+		[ordered]@{ role = "system"; content = $(if ($ToolsEnabled) { "You must call get_proven_lanes with no arguments. After its result, reply with exactly OFXGGML_AGENTS_TOOL_OK and no extra text." } else { "Reply with exactly OFXGGML_AGENTS_SMOKE_OK and no extra text." }) },
+		[ordered]@{ role = "user"; content = $Prompt }
+	)
+	$payload = [ordered]@{ model = $Model; messages = $messages; temperature = 0; max_tokens = 128; stream = $false }
+	if ($ToolsEnabled) {
+		$payload.tools = @([ordered]@{ type = "function"; function = [ordered]@{ name = "get_proven_lanes"; description = "Read proven lanes from the canonical ecosystem manifest."; parameters = [ordered]@{ type = "object"; properties = [ordered]@{}; additionalProperties = $false } } })
 	}
-
-	$payload = [ordered]@{
-		model = $Model
-		messages = @(
-			[ordered]@{
-				role = "system"
-				content = "Reply with exactly OFXGGML_AGENTS_SMOKE_OK and no extra text."
-			},
-			[ordered]@{
-				role = "user"
-				content = $Prompt
-			}
-		)
-		temperature = 0
-		max_tokens = 32
-		stream = $false
-	}
-
 	$headers = @{}
-	if (![string]::IsNullOrWhiteSpace($ApiKey)) {
-		$headers["Authorization"] = "Bearer $ApiKey"
-	}
+	if ($ApiKey) { $headers["Authorization"] = "Bearer $ApiKey" }
+	$fixtures = if ($ResponseFixturePath) { @(Get-Content -LiteralPath $ResponseFixturePath -Raw | ConvertFrom-Json) } else { $null }
+	$requestIndex = 0
 	$started = Get-Date
 	try {
-		$response = Invoke-RestMethod `
-			-Method Post `
-			-Uri $endpoint `
-			-Headers $headers `
-			-Body (ConvertTo-Json $payload -Depth 10) `
-			-ContentType "application/json" `
-			-TimeoutSec ([Math]::Max(1, $TimeoutSeconds))
+		$response = if ($fixtures) { $fixtures[$requestIndex++] } else { Invoke-RestMethod -Method Post -Uri $endpoint -Headers $headers -Body (ConvertTo-Json $payload -Depth 20) -ContentType "application/json" -TimeoutSec ([Math]::Max(1, $TimeoutSeconds)) }
+		$choice = $response.choices[0]
+		$message = $choice.message
+		$reply = if ($message -and $message.PSObject.Properties["content"]) { [string]$message.content } else { [string]$choice.text }
+		$toolExecuted = $false
+		$toolName = ""
+		$toolEncoding = ""
+		if ($ToolsEnabled) {
+			$toolCall = Get-NormalizedToolCall -Message $message
+			if (!$toolCall) { throw "Model did not request an allowlisted tool" }
+			$toolName = $toolCall.Name
+			$toolEncoding = $toolCall.Encoding
+			if ($toolName -ne "get_proven_lanes") { throw "Model requested non-allowlisted tool: $toolName" }
+			$arguments = $toolCall.Arguments | ConvertFrom-Json
+			if (@($arguments.PSObject.Properties).Count -ne 0) { throw "get_proven_lanes does not accept arguments" }
+			$toolResult = [ordered]@{ proven_lanes = @(Get-ProvenLanes -Path $EcosystemPath) } | ConvertTo-Json -Compress
+			$payload.messages = @($messages) + @($message)
+			$toolMessage = [ordered]@{ role = "tool"; name = $toolName; content = $toolResult }
+			if ($toolCall.Id) { $toolMessage.tool_call_id = $toolCall.Id }
+			$payload.messages += $toolMessage
+			$response = if ($fixtures) { $fixtures[$requestIndex++] } else { Invoke-RestMethod -Method Post -Uri $endpoint -Headers $headers -Body (ConvertTo-Json $payload -Depth 20) -ContentType "application/json" -TimeoutSec ([Math]::Max(1, $TimeoutSeconds)) }
+			$reply = [string]$response.choices[0].message.content
+			$toolExecuted = $true
+		}
 		$elapsedMs = [int]((Get-Date) - $started).TotalMilliseconds
 	} catch {
-		$elapsedMs = [int]((Get-Date) - $started).TotalMilliseconds
-		return [ordered]@{
-			Passed = $false
-			ExitCode = 1
-			Error = $_.Exception.Message
-			SmokeKind = "openai-compatible-chat"
-			Backend = "openai-compatible"
-			ModelPath = $Model
-			ElapsedMs = $elapsedMs
-			ResponseText = ""
-		}
-	}
-
-	$reply = ""
-	if ($response.choices -is [array] -and $response.choices.Count -gt 0) {
-		$choice = $response.choices[0]
-		if ($choice.message -and $choice.message.PSObject.Properties["content"]) {
-			$reply = [string]$choice.message.content
-		} elseif ($choice.text -ne $null) {
-			$reply = [string]$choice.text
-		}
+		return [ordered]@{ Passed = $false; ExitCode = 1; Error = $_.Exception.Message; SmokeKind = $(if ($ToolsEnabled) { "openai-compatible-tool-loop" } else { "openai-compatible-chat" }); Backend = "openai-compatible"; ModelPath = $Model; ElapsedMs = [int]((Get-Date) - $started).TotalMilliseconds; ResponseText = ""; ToolExecutionBacked = $false }
 	}
 	$replyText = $reply.Trim()
-	$expected = "OFXGGML_AGENTS_SMOKE_OK"
-	return [ordered]@{
-		Passed = ($replyText -eq $expected)
-		ExitCode = if ($replyText -eq $expected) { 0 } else { 3 }
-		Error = if ($replyText -eq $expected) { "" } else { "agent endpoint smoke did not return OFXGGML_AGENTS_SMOKE_OK" }
-		SmokeKind = "openai-compatible-chat"
-		Backend = "openai-compatible"
-		ModelPath = $Model
-		ElapsedMs = $elapsedMs
-		ResponseText = $replyText
-	}
+	$expected = if ($ToolsEnabled) { "OFXGGML_AGENTS_TOOL_OK" } else { "OFXGGML_AGENTS_SMOKE_OK" }
+	$passed = $replyText -eq $expected -and (!$ToolsEnabled -or $toolExecuted)
+	return [ordered]@{ Passed = $passed; ExitCode = $(if ($passed) { 0 } else { 3 }); Error = $(if ($passed) { "" } else { "agent endpoint smoke did not complete the expected model/tool loop" }); SmokeKind = $(if ($ToolsEnabled) { "openai-compatible-tool-loop" } else { "openai-compatible-chat" }); Backend = $(if ($fixtures) { "response-fixture" } else { "openai-compatible" }); ModelPath = $Model; ElapsedMs = $elapsedMs; ResponseText = $replyText; ToolExecutionBacked = [bool]$toolExecuted; ToolName = $toolName; ToolCallEncoding = $toolEncoding; FixtureBacked = [bool]$fixtures }
 }
 
 if ($DryRun) {
@@ -348,15 +350,19 @@ $results += Invoke-SmokeStep -Name "planning helper tests" -Arguments $testArgs
 $results += Invoke-SmokeStep -Name "Agents doctor" -Arguments $doctorArgs
 
 $endpointConfigured = !([string]::IsNullOrWhiteSpace($ServerBaseUrl) -or [string]::IsNullOrWhiteSpace($Model))
+$resolvedEcosystemPath = Resolve-EcosystemPath -ConfiguredPath $EcosystemPath
 $endpointSummary = $null
-if ($endpointConfigured -or $RequireEndpoint) {
-	$endpointSummary = Invoke-AgentEndpointSmoke -BaseUrl $ServerBaseUrl -Model $Model -Prompt $Prompt -ApiKey $ApiKey -TimeoutSeconds $TimeoutSeconds
+if ($endpointConfigured -or $RequireEndpoint -or $ResponseFixturePath) {
+	$endpointSummary = Invoke-AgentEndpointSmoke -BaseUrl $ServerBaseUrl -Model $Model -Prompt $Prompt -ApiKey $ApiKey -TimeoutSeconds $TimeoutSeconds -ToolsEnabled ([bool]$EnableTools) -EcosystemPath $resolvedEcosystemPath -ResponseFixturePath $ResponseFixturePath
 	$results += [ordered]@{
 		Name = "agent endpoint smoke"
 		Passed = [bool]$endpointSummary.Passed
 		ExitCode = [int]$endpointSummary.ExitCode
 		Output = @($endpointSummary.Error, $endpointSummary.ResponseText)
 	}
+}
+if ($RequireToolExecution -and (!$endpointSummary -or !$endpointSummary.ToolExecutionBacked)) {
+	$results += [ordered]@{ Name = "required tool execution"; Passed = $false; ExitCode = 4; Output = @("required allowlisted tool execution was not demonstrated") }
 }
 
 $failed = @($results | Where-Object { -not $_.Passed })
@@ -367,12 +373,14 @@ $smokeKind = "planning-boundary"
 $backend = "planning-boundary"
 $modelPath = "<not-configured>"
 $inferenceChecked = $false
+$toolExecutionBacked = $false
 if ($endpointSummary) {
 	$smokeKind = [string]$endpointSummary.SmokeKind
 	$backend = [string]$endpointSummary.Backend
-	$modelBacked = [bool]$endpointSummary.Passed
-	$inferenceChecked = [bool]$endpointSummary.Passed
+	$modelBacked = [bool]$endpointSummary.Passed -and !$endpointSummary.FixtureBacked
+	$inferenceChecked = [bool]$endpointSummary.Passed -and !$endpointSummary.FixtureBacked
 	$modelPath = [string]$endpointSummary.ModelPath
+	$toolExecutionBacked = [bool]$endpointSummary.ToolExecutionBacked
 	if ([string]::IsNullOrWhiteSpace($modelPath)) {
 		$modelPath = "<not-configured>"
 	}
@@ -385,7 +393,7 @@ $summary = [ordered]@{
 	Configuration = $Configuration
 	BuildDir = $BuildDir
 	ModelBacked = [bool]$modelBacked
-	ToolExecutionBacked = $false
+	ToolExecutionBacked = [bool]$toolExecutionBacked
 	InferenceChecked = [bool]$inferenceChecked
 	HermesInstalled = ![string]::IsNullOrWhiteSpace($HermesRoot) -and
 		(Test-Path -LiteralPath ([Environment]::ExpandEnvironmentVariables($HermesRoot)) -PathType Container) -and
@@ -393,6 +401,8 @@ $summary = [ordered]@{
 	HermesRoot = if ([string]::IsNullOrWhiteSpace($HermesRoot)) { "" } else { [Environment]::ExpandEnvironmentVariables($HermesRoot) }
 	SmokeKind = $smokeKind
 	ModelPath = [string]$modelPath
+	ToolName = $(if ($endpointSummary) { [string]$endpointSummary.ToolName } else { "" })
+	ToolCallEncoding = $(if ($endpointSummary) { [string]$endpointSummary.ToolCallEncoding } else { "" })
 	ResultCount = $results.Count
 	FailedCount = $failed.Count
 	ElapsedMs = $elapsedMs
@@ -409,6 +419,9 @@ if ($Json) {
 				SmokeKind = [string]$summary.SmokeKind
 				Backend = [string]$summary.Backend
 				ModelPath = [string]$summary.ModelPath
+				ToolExecutionBacked = [bool]$summary.ToolExecutionBacked
+				ToolName = [string]$summary.ToolName
+				ToolCallEncoding = [string]$summary.ToolCallEncoding
 				HermesInstalled = [bool]$summary.HermesInstalled
 				HermesRoot = [string]$summary.HermesRoot
 			}

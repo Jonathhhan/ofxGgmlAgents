@@ -1,7 +1,11 @@
 #include "ofApp.h"
 
 #include <cstdlib>
+#include <algorithm>
+#include <chrono>
+#include <cstdio>
 #include <sstream>
+#include <stdexcept>
 
 namespace {
 	const char * kLogModule = "ofxGgmlAgentsPlannerExample";
@@ -47,6 +51,123 @@ namespace {
 	const char * displayValue(const std::string & value) {
 		return value.empty() ? "(not set)" : value.c_str();
 	}
+
+	std::string resolveChatEndpoint(const std::string & baseUrl) {
+		std::string endpoint = ofTrim(baseUrl);
+		while (!endpoint.empty() && endpoint.back() == '/') endpoint.pop_back();
+		if (ofToLower(endpoint).size() >= 3 && ofToLower(endpoint).substr(endpoint.size() - 3) == "/v1") {
+			return endpoint + "/chat/completions";
+		}
+		return endpoint + "/v1/chat/completions";
+	}
+
+	std::vector<std::string> readProvenLanes(const std::string & path) {
+		ofBuffer buffer = ofBufferFromFile(path);
+		if (buffer.size() == 0) throw std::runtime_error("Canonical ecosystem file was not found or was empty: " + path);
+		std::vector<std::string> lanes;
+		std::string currentLane;
+		for (const auto & rawLine : buffer.getLines()) {
+			const std::string line = ofTrim(rawLine);
+			if (line.rfind("lane:", 0) == 0) currentLane = ofTrim(line.substr(5));
+			else if (line == "status: proven" && !currentLane.empty()) {
+				if (std::find(lanes.begin(), lanes.end(), currentLane) == lanes.end()) lanes.push_back(currentLane);
+				currentLane.clear();
+			}
+		}
+		return lanes;
+	}
+
+	struct NormalizedToolCall {
+		std::string id;
+		std::string name;
+		std::string encoding;
+		ofJson arguments;
+	};
+
+	NormalizedToolCall normalizeToolCall(const ofJson & message) {
+		if (message.contains("tool_calls") && message["tool_calls"].is_array() && !message["tool_calls"].empty()) {
+			const auto & call = message["tool_calls"][0];
+			NormalizedToolCall result;
+			result.id = call.value("id", "");
+			result.name = call.at("function").value("name", "");
+			result.encoding = "structured-tool-calls";
+			const std::string arguments = call.at("function").value("arguments", "{}");
+			result.arguments = ofJson::parse(arguments.empty() ? "{}" : arguments);
+			return result;
+		}
+		const std::string content = message.value("content", "");
+		const ofJson decoded = ofJson::parse(ofTrim(content));
+		NormalizedToolCall result;
+		result.name = decoded.value("name", "");
+		result.arguments = decoded.value("arguments", ofJson::object());
+		result.encoding = "json-in-content";
+		return result;
+	}
+
+	ofHttpResponse postJson(const std::string & endpoint, const ofJson & body, const std::string & apiKey) {
+		ofHttpRequest request;
+		request.url = endpoint;
+		request.method = ofHttpRequest::POST;
+		request.body = body.dump();
+		request.contentType = "application/json";
+		request.verbose = false;
+		if (!apiKey.empty()) request.headers["Authorization"] = "Bearer " + apiKey;
+		ofURLFileLoader loader;
+		return loader.handleRequest(request);
+	}
+
+	ofApp::ToolLoopResult executeToolLoop(const std::string & baseUrl, const std::string & model,
+		const std::string & apiKey, const std::string & ecosystemPath) {
+		ofApp::ToolLoopResult result;
+		const auto started = std::chrono::steady_clock::now();
+		try {
+			if (ofTrim(baseUrl).empty() || ofTrim(model).empty()) throw std::runtime_error("Endpoint base URL and model are required.");
+			const std::string endpoint = resolveChatEndpoint(baseUrl);
+			result.events.push_back("Model request: asking " + model + " to call get_proven_lanes");
+			ofJson payload = {
+				{"model", model}, {"temperature", 0}, {"max_tokens", 128}, {"stream", false},
+				{"messages", ofJson::array({
+					{{"role", "system"}, {"content", "You must call get_proven_lanes with no arguments. After its result, reply with exactly OFXGGML_AGENTS_TOOL_OK and no extra text."}},
+					{{"role", "user"}, {"content", "Use the available tool to identify the proven model lanes."}}
+				})},
+				{"tools", ofJson::array({{{"type", "function"}, {"function", {{"name", "get_proven_lanes"}, {"description", "Read proven lanes from the canonical ecosystem manifest."}, {"parameters", {{"type", "object"}, {"properties", ofJson::object()}, {"additionalProperties", false}}}}}}})}
+			};
+			ofHttpResponse first = postJson(endpoint, payload, apiKey);
+			if (first.status < 200 || first.status >= 300) throw std::runtime_error("Initial model request failed (HTTP " + ofToString(first.status) + "): " + first.error);
+			const ofJson firstJson = ofJson::parse(first.data.getText());
+			const ofJson assistantMessage = firstJson.at("choices").at(0).at("message");
+			const NormalizedToolCall toolCall = normalizeToolCall(assistantMessage);
+			if (toolCall.name != "get_proven_lanes") throw std::runtime_error("Model requested non-allowlisted tool: " + toolCall.name);
+			if (!toolCall.arguments.is_object() || !toolCall.arguments.empty()) throw std::runtime_error("get_proven_lanes does not accept arguments.");
+			result.toolCallEncoding = toolCall.encoding;
+			result.events.push_back("Model requested tool: get_proven_lanes (" + toolCall.encoding + ")");
+			result.provenLanes = readProvenLanes(ecosystemPath);
+			result.events.push_back("Executed read-only tool: get_proven_lanes");
+			result.events.push_back("Returned lanes: " + ofJoinString(result.provenLanes, ", "));
+			ofJson toolResult = {{"proven_lanes", result.provenLanes}};
+			payload["messages"].push_back(assistantMessage);
+			ofJson toolMessage = {{"role", "tool"}, {"name", "get_proven_lanes"}, {"content", toolResult.dump()}};
+			if (!toolCall.id.empty()) toolMessage["tool_call_id"] = toolCall.id;
+			payload["messages"].push_back(toolMessage);
+			ofHttpResponse second = postJson(endpoint, payload, apiKey);
+			if (second.status < 200 || second.status >= 300) throw std::runtime_error("Final model request failed (HTTP " + ofToString(second.status) + "): " + second.error);
+			const ofJson secondJson = ofJson::parse(second.data.getText());
+			result.finalConfirmation = ofTrim(secondJson.at("choices").at(0).at("message").value("content", ""));
+			if (result.finalConfirmation != "OFXGGML_AGENTS_TOOL_OK") throw std::runtime_error("Model did not return OFXGGML_AGENTS_TOOL_OK; received: " + result.finalConfirmation);
+			result.events.push_back("Final confirmation: " + result.finalConfirmation);
+			result.success = true;
+		} catch (const std::exception & error) {
+			result.error = error.what();
+			result.events.push_back("Error: " + result.error);
+		}
+		result.elapsedMs = static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started).count());
+		return result;
+	}
+}
+
+ofApp::ToolLoopResult ofApp::runToolLoopForSmoke(const std::string & baseUrl, const std::string & model,
+	const std::string & apiKey, const std::string & ecosystemPath) {
+	return executeToolLoop(baseUrl, model, apiKey, ecosystemPath);
 }
 
 void ofApp::setup() {
@@ -56,6 +177,15 @@ void ofApp::setup() {
 	buildScenarios();
 	selectScenario(0);
 	logHandoff();
+}
+
+void ofApp::update() {
+	if (toolLoopState != ToolLoopState::Running || !toolLoopFuture.valid()) return;
+	if (toolLoopFuture.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready) return;
+	toolLoopResult = toolLoopFuture.get();
+	toolLoopState = toolLoopResult.success ? ToolLoopState::Succeeded : ToolLoopState::Failed;
+	for (const auto & event : toolLoopResult.events) ofLogNotice(kLogModule) << event;
+	ofLogNotice(kLogModule) << "Tool loop elapsed: " << toolLoopResult.elapsedMs << " ms";
 }
 
 void ofApp::draw() {
@@ -212,7 +342,12 @@ void ofApp::refreshHandoffText() {
 void ofApp::refreshEndpointStatus() {
 	endpointBaseUrl = readEnvironmentValue("OFXGGML_AGENT_LLM_BASE_URL");
 	endpointModel = readEnvironmentValue("OFXGGML_AGENT_LLM_MODEL");
-	endpointApiKeyConfigured = !readEnvironmentValue("OFXGGML_AGENT_LLM_API_KEY").empty();
+	endpointApiKey = readEnvironmentValue("OFXGGML_AGENT_LLM_API_KEY");
+	endpointApiKeyConfigured = !endpointApiKey.empty();
+	ecosystemPath = readEnvironmentValue("OFXGGML_AGENT_ECOSYSTEM_PATH");
+	if (ecosystemPath.empty()) ecosystemPath = ofToDataPath("../../../../ofxGgmlWorkflows/ecosystem.yaml", true);
+	std::snprintf(endpointBaseUrlInput.data(), endpointBaseUrlInput.size(), "%s", endpointBaseUrl.c_str());
+	std::snprintf(endpointModelInput.data(), endpointModelInput.size(), "%s", endpointModel.c_str());
 	if (!scenarios.empty()) {
 		refreshHandoffText();
 	}
@@ -287,25 +422,43 @@ void ofApp::drawBoundaryTab() const {
 }
 
 void ofApp::drawEndpointTab() {
-	const bool endpointConfigured = !endpointBaseUrl.empty() && !endpointModel.empty();
+	endpointBaseUrl = endpointBaseUrlInput.data();
+	endpointModel = endpointModelInput.data();
+	const bool endpointConfigured = !ofTrim(endpointBaseUrl).empty() && !ofTrim(endpointModel).empty();
 	if (ImGui::Button("Refresh environment")) {
 		refreshEndpointStatus();
 	}
 	ImGui::Spacing();
+	ImGui::InputText("Endpoint base URL", endpointBaseUrlInput.data(), endpointBaseUrlInput.size());
+	ImGui::InputText("Model alias", endpointModelInput.data(), endpointModelInput.size());
+	ImGui::TextWrapped("Manifest: %s", ecosystemPath.c_str());
+	if (toolLoopState == ToolLoopState::Running) ImGui::BeginDisabled();
+	if (ImGui::Button("Run allowlisted tool loop")) startToolLoop();
+	if (toolLoopState == ToolLoopState::Running) ImGui::EndDisabled();
+	ImGui::SameLine();
+	const char * stateText = toolLoopState == ToolLoopState::Idle ? "idle" : toolLoopState == ToolLoopState::Running ? "running" : toolLoopState == ToolLoopState::Succeeded ? "completed" : "failed";
+	ImGui::Text("State: %s", stateText);
+	ImGui::Separator();
 	ImGui::TextUnformatted("Endpoint configured");
 	ImGui::TextWrapped("%s", endpointConfigured ? "yes" : "no");
-	ImGui::Spacing();
-	ImGui::TextUnformatted("OFXGGML_AGENT_LLM_BASE_URL");
-	ImGui::TextWrapped("%s", displayValue(endpointBaseUrl));
-	ImGui::Spacing();
-	ImGui::TextUnformatted("OFXGGML_AGENT_LLM_MODEL");
-	ImGui::TextWrapped("%s", displayValue(endpointModel));
 	ImGui::Spacing();
 	ImGui::TextUnformatted("OFXGGML_AGENT_LLM_API_KEY");
 	ImGui::TextWrapped("%s", endpointApiKeyConfigured ? "(configured, value hidden)" : "(not set)");
 	ImGui::Spacing();
+	ImGui::Text("Elapsed: %d ms", toolLoopResult.elapsedMs);
+	for (const auto & event : toolLoopResult.events) ImGui::BulletText("%s", event.c_str());
 	ImGui::Separator();
-	ImGui::TextWrapped("This example only records endpoint handoff state. It does not start llama.cpp, download models, call a server, or expose API key values.");
+	ImGui::TextWrapped("Offline by default: network and tool execution begin only when Run is clicked. This example consumes an already-running endpoint; it never starts or configures the provider.");
+}
+
+void ofApp::startToolLoop() {
+	if (toolLoopState == ToolLoopState::Running) return;
+	endpointBaseUrl = endpointBaseUrlInput.data();
+	endpointModel = endpointModelInput.data();
+	toolLoopResult = {};
+	toolLoopState = ToolLoopState::Running;
+	ofLogNotice(kLogModule) << "Starting explicit allowlisted get_proven_lanes loop";
+	toolLoopFuture = std::async(std::launch::async, executeToolLoop, endpointBaseUrl, endpointModel, endpointApiKey, ecosystemPath);
 }
 
 void ofApp::logHandoff() const {
