@@ -70,9 +70,7 @@ Assert-Path (Join-Path $addonsRoot "ofxImGui") "sibling ofxImGui addon for examp
 
 Write-Step "Checking example layout"
 $exampleRoot = Join-Path $addonRoot "ofxGgmlAgentsPlannerExample"
-$codexExampleRoot = Join-Path $addonRoot "ofxGgmlAgentsCodexLocalExample"
 Assert-Path $exampleRoot "root-level smoke example" -Directory
-Assert-Path $codexExampleRoot "Codex local handoff pointer" -Directory
 Assert-Path (Join-Path $exampleRoot "addons.make") "smoke example addons.make"
 Assert-FileContains (Join-Path $exampleRoot "addons.make") "(?m)^ofxImGui\s*$" "smoke example addons.make"
 Assert-Path (Join-Path $exampleRoot "src\main.cpp") "smoke example main.cpp"
@@ -94,17 +92,13 @@ Assert-FileContains $exampleAppSource "Run allowlisted tool loop" "smoke example
 Assert-FileContains $exampleAppSource "get_proven_lanes" "smoke example allowlisted tool"
 Assert-FileContains $exampleAppSource "structured-tool-calls" "smoke example structured tool normalization"
 Assert-FileContains $exampleAppSource "json-in-content" "smoke example content tool normalization"
+Assert-FileContains $exampleAppSource "xml-in-content" "smoke example XML tool normalization"
 Assert-FileContains $exampleAppSource "Offline by default" "smoke example offline default"
 Assert-FileContains $exampleReadme "Copy handoff" "smoke example README"
 Assert-FileContains $exampleReadme "Endpoint tab" "smoke example README"
 Assert-FileContains $exampleReadme "API key" "smoke example README"
 Assert-FileContains $exampleReadme "Run allowlisted tool loop" "smoke example README tool loop"
 Assert-FileContains $exampleReadme "docs/AGENT_WORKFLOWS.md" "smoke example README"
-$codexExampleReadme = Join-Path $codexExampleRoot "README.md"
-Assert-Path $codexExampleReadme "Codex local handoff README"
-Assert-FileContains $codexExampleReadme "handoff pointer" "Codex local handoff README"
-Assert-FileContains $codexExampleReadme "ofxGgmlLlama/ofxGgmlLlamaCodexLocalExample" "Codex local handoff README"
-Assert-FileContains $codexExampleReadme "should stay out of git" "Codex local handoff README"
 Assert-Path (Join-Path $addonRoot "tests\CMakeLists.txt") "test CMakeLists"
 Assert-Path (Join-Path $addonRoot "tests\test_main.cpp") "test source"
 Assert-Path (Join-Path $scriptRoot "doctor-agents.ps1") "Agents doctor script"

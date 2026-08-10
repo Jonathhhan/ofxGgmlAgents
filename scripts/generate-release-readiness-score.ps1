@@ -41,9 +41,7 @@ try {
         @{ Category="tests"; Name="CMakeLists.txt"; Weight=2; Test={ Test-PathLeaf "tests\CMakeLists.txt" } },
         @{ Category="tests"; Name="test_main.cpp"; Weight=2; Test={ Test-PathLeaf "tests\test_main.cpp" } },
         @{ Category="examples"; Name="ofxGgmlAgentsPlannerExample README"; Weight=1; Test={ Test-PathLeaf "ofxGgmlAgentsPlannerExample\README.md" } },
-        @{ Category="examples"; Name="ofxGgmlAgentsCodexLocalExample handoff README"; Weight=1; Test={ Test-PathLeaf "ofxGgmlAgentsCodexLocalExample\README.md" } },
         @{ Category="examples"; Name="ofxGgmlAgentsPlannerExample"; Weight=1; Test={ Test-PathDir "ofxGgmlAgentsPlannerExample" } },
-        @{ Category="examples"; Name="ofxGgmlAgentsCodexLocalExample handoff pointer"; Weight=1; Test={ Test-PathDir "ofxGgmlAgentsCodexLocalExample" } },
         @{ Category="hygiene"; Name="gitignore_build"; Weight=1; Test={ (Get-Content ".gitignore" -Raw) -match "build/" } },
         @{ Category="hygiene"; Name="gitignore_binaries"; Weight=1; Test={ $ig = (Get-Content ".gitignore" -Raw); $ig -match "\.exe" -and $ig -match "\.dll" } },
         @{ Category="hygiene"; Name="gitignore_models"; Weight=1; Test={ (Get-Content ".gitignore" -Raw) -match "models/" } }

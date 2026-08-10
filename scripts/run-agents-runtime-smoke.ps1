@@ -228,6 +228,10 @@ function Get-NormalizedToolCall {
 			return [ordered]@{ Id = ""; Name = [string]$decoded.name; Arguments = ($decoded.arguments | ConvertTo-Json -Compress -Depth 10); Encoding = "json-in-content" }
 		}
 	} catch {}
+	$content = [string]$Message.content
+	if ($content -match '(?s)<function>\s*<name>\s*([^<]+?)\s*</name>\s*<arguments>\s*(\{.*?\})\s*</arguments>\s*</function>') {
+		return [ordered]@{ Id = ""; Name = $Matches[1].Trim(); Arguments = $Matches[2].Trim(); Encoding = "xml-in-content" }
+	}
 	return $null
 }
 
@@ -275,6 +279,7 @@ function Invoke-AgentEndpointSmoke {
 			if ($toolCall.Id) { $toolMessage.tool_call_id = $toolCall.Id }
 			$payload.messages += $toolMessage
 			[void]$payload.Remove("tool_choice")
+			[void]$payload.Remove("tools")
 			$response = if ($fixtures) { $fixtures[$requestIndex++] } else { Invoke-RestMethod -Method Post -Uri $endpoint -Headers $headers -Body (ConvertTo-Json $payload -Depth 20) -ContentType "application/json" -TimeoutSec ([Math]::Max(1, $TimeoutSeconds)) }
 			$reply = [string]$response.choices[0].message.content
 			$toolExecuted = $true

@@ -52,9 +52,6 @@ For local LLM provider handoff from an `ofxGgmlLlama` `llama-server`, see
 [`docs/LOCAL_LLM_ENDPOINTS.md`](docs/LOCAL_LLM_ENDPOINTS.md).
 The concrete OpenAI Codex + llama.cpp setup example lives in
 `ofxGgmlLlama/ofxGgmlLlamaCodexLocalExample`.
-`ofxGgmlAgentsCodexLocalExample` is kept only as a handoff pointer for local
-workspaces; it should not grow llama.cpp startup, model download, or
-client-specific provider setup here.
 
 Hermes Agent is treated as an external planning client. If it is installed at
 `%LOCALAPPDATA%\hermes` or `HERMES_HOME`, `scripts\doctor-agents.*` reports the

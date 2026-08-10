@@ -96,11 +96,31 @@ namespace {
 			return result;
 		}
 		const std::string content = message.value("content", "");
-		const ofJson decoded = ofJson::parse(ofTrim(content));
+		try {
+			const ofJson decoded = ofJson::parse(ofTrim(content));
+			NormalizedToolCall result;
+			result.name = decoded.value("name", "");
+			result.arguments = decoded.value("arguments", ofJson::object());
+			result.encoding = "json-in-content";
+			return result;
+		} catch (const ofJson::parse_error &) {}
+
+		const auto extractTag = [&content](const std::string & tag) {
+			const std::string opening = "<" + tag + ">";
+			const std::string closing = "</" + tag + ">";
+			const std::size_t start = content.find(opening);
+			if (start == std::string::npos) return std::string();
+			const std::size_t valueStart = start + opening.size();
+			const std::size_t end = content.find(closing, valueStart);
+			if (end == std::string::npos) return std::string();
+			return ofTrim(content.substr(valueStart, end - valueStart));
+		};
 		NormalizedToolCall result;
-		result.name = decoded.value("name", "");
-		result.arguments = decoded.value("arguments", ofJson::object());
-		result.encoding = "json-in-content";
+		result.name = extractTag("name");
+		const std::string arguments = extractTag("arguments");
+		if (result.name.empty() || arguments.empty()) throw std::runtime_error("Model did not request an allowlisted tool.");
+		result.arguments = ofJson::parse(arguments);
+		result.encoding = "xml-in-content";
 		return result;
 	}
 
@@ -130,7 +150,8 @@ namespace {
 					{{"role", "system"}, {"content", "You must call get_proven_lanes with no arguments. After its result, reply with exactly OFXGGML_AGENTS_TOOL_OK and no extra text."}},
 					{{"role", "user"}, {"content", "Use the available tool to identify the proven model lanes."}}
 				})},
-				{"tools", ofJson::array({{{"type", "function"}, {"function", {{"name", "get_proven_lanes"}, {"description", "Read proven lanes from the canonical ecosystem manifest."}, {"parameters", {{"type", "object"}, {"properties", ofJson::object()}, {"additionalProperties", false}}}}}}})}
+				{"tools", ofJson::array({{{"type", "function"}, {"function", {{"name", "get_proven_lanes"}, {"description", "Read proven lanes from the canonical ecosystem manifest."}, {"parameters", {{"type", "object"}, {"properties", ofJson::object()}, {"additionalProperties", false}}}}}}})},
+				{"tool_choice", "required"}
 			};
 			ofHttpResponse first = postJson(endpoint, payload, apiKey);
 			if (first.status < 200 || first.status >= 300) throw std::runtime_error("Initial model request failed (HTTP " + ofToString(first.status) + "): " + first.error);
@@ -149,6 +170,8 @@ namespace {
 			ofJson toolMessage = {{"role", "tool"}, {"name", "get_proven_lanes"}, {"content", toolResult.dump()}};
 			if (!toolCall.id.empty()) toolMessage["tool_call_id"] = toolCall.id;
 			payload["messages"].push_back(toolMessage);
+			payload.erase("tool_choice");
+			payload.erase("tools");
 			ofHttpResponse second = postJson(endpoint, payload, apiKey);
 			if (second.status < 200 || second.status >= 300) throw std::runtime_error("Final model request failed (HTTP " + ofToString(second.status) + "): " + second.error);
 			const ofJson secondJson = ofJson::parse(second.data.getText());
