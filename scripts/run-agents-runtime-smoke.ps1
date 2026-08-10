@@ -241,11 +241,12 @@ function Invoke-AgentEndpointSmoke {
 	}
 	$messages = @(
 		[ordered]@{ role = "system"; content = $(if ($ToolsEnabled) { "You must call get_proven_lanes with no arguments. After its result, reply with exactly OFXGGML_AGENTS_TOOL_OK and no extra text." } else { "Reply with exactly OFXGGML_AGENTS_SMOKE_OK and no extra text." }) },
-		[ordered]@{ role = "user"; content = $Prompt }
+		[ordered]@{ role = "user"; content = $(if ($ToolsEnabled) { "Call get_proven_lanes now." } else { $Prompt }) }
 	)
 	$payload = [ordered]@{ model = $Model; messages = $messages; temperature = 0; max_tokens = 128; stream = $false }
 	if ($ToolsEnabled) {
 		$payload.tools = @([ordered]@{ type = "function"; function = [ordered]@{ name = "get_proven_lanes"; description = "Read proven lanes from the canonical ecosystem manifest."; parameters = [ordered]@{ type = "object"; properties = [ordered]@{}; additionalProperties = $false } } })
+		$payload.tool_choice = "required"
 	}
 	$headers = @{}
 	if ($ApiKey) { $headers["Authorization"] = "Bearer $ApiKey" }
@@ -273,6 +274,7 @@ function Invoke-AgentEndpointSmoke {
 			$toolMessage = [ordered]@{ role = "tool"; name = $toolName; content = $toolResult }
 			if ($toolCall.Id) { $toolMessage.tool_call_id = $toolCall.Id }
 			$payload.messages += $toolMessage
+			[void]$payload.Remove("tool_choice")
 			$response = if ($fixtures) { $fixtures[$requestIndex++] } else { Invoke-RestMethod -Method Post -Uri $endpoint -Headers $headers -Body (ConvertTo-Json $payload -Depth 20) -ContentType "application/json" -TimeoutSec ([Math]::Max(1, $TimeoutSeconds)) }
 			$reply = [string]$response.choices[0].message.content
 			$toolExecuted = $true
