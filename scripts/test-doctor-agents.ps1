@@ -11,7 +11,6 @@ if (!$?) {
 $text = $output -join "`n"
 foreach ($expected in @(
 	"ofxGgmlAgents doctor",
-	"ofxGgmlCore sibling",
 	"planner example",
 	"agent request types",
 	"agent goal",

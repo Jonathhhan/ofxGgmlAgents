@@ -114,8 +114,7 @@ Clear-StaleCMakeBuildDir -BuildDir $BuildDir
 function Test-RuntimeSmokeReady {
 	return (Test-Path -LiteralPath (Join-Path $addonRoot "src\ofxGgmlAgents\ofxGgmlAgentsTypes.h") -PathType Leaf) -and
 		(Test-Path -LiteralPath (Join-Path $addonRoot "src\ofxGgmlAgents\ofxGgmlAgentsUtils.cpp") -PathType Leaf) -and
-		(Test-Path -LiteralPath (Join-Path $addonRoot "tests\test_main.cpp") -PathType Leaf) -and
-		(Test-Path -LiteralPath (Join-Path $addonsRoot "ofxGgmlCore") -PathType Container)
+		(Test-Path -LiteralPath (Join-Path $addonRoot "tests\test_main.cpp") -PathType Leaf)
 }
 
 function New-DryRunSummary {

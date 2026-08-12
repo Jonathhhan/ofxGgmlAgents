@@ -1,16 +1,18 @@
 # Architecture
 
-`ofxGgmlAgents` owns agent-specific orchestration code. It should use `ofxGgmlCore` for stable runtime primitives and keep workflow loops out of core.
+`ofxGgmlAgents` owns agent-specific orchestration code and has no direct ggml
+runtime dependency. Concrete model execution stays in its companion addon.
 
 ## Dependency Direction
 
 ```text
 openFrameworks app
   -> ofxGgmlAgents
-      -> ofxGgmlCore
+  -> optional retrieval and model companions
 ```
 
-No dependency should point from `ofxGgmlCore` back to `ofxGgmlAgents`.
+Tool and model handoffs remain app-level composition; Agents does not link
+model companions transitively.
 
 ## Owned Here
 

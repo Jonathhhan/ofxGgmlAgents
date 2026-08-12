@@ -5,7 +5,7 @@
 - Seed the companion addon skeleton.
 - Keep `ofxGgmlAgentsPlannerExample` as the first root-level smoke example with
   copyable planning handoff records.
-- Keep `ofxGgmlCore` as the only required library dependency; combined examples may depend on `ofxGgmlRag` and `ofxImGui`.
+- Keep orchestration independent of a concrete ggml runtime; combined examples may depend on `ofxGgmlRag` and `ofxImGui`.
 - Add local validation and headless tests.
 - Add independent addon version metadata and release-candidate docs.
 - Document the `clone -> setup -> run` path from a new user's point of view.

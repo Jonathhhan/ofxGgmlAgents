@@ -1,8 +1,9 @@
 # ofxGgmlAgents
 
-`ofxGgmlAgents` is the companion addon for local agent orchestration, tool-use loops, planning helpers, and assistant workflows on top of `ofxGgmlCore`.
+`ofxGgmlAgents` is the standalone companion addon for local agent orchestration, tool-use loops, planning helpers, and assistant workflows.
 
-`ofxGgmlCore` stays the dependency. This addon owns agent-specific workflow code so core can stay small and boring.
+It has no direct Core or ggml link dependency. Apps explicitly combine it with
+`ofxGgmlRag`, `ofxGgmlLlama`, or other local model companions.
 
 This is the internal agent lane for the ofxGgml ecosystem: planning loops, tool
 registries, memory handoff, and addon-to-addon orchestration live here. Llama.cpp
@@ -37,7 +38,7 @@ shows sample agent workflow handoffs, companion-tool ownership, validation
 commands, and explicit out-of-scope runtime work. Its Endpoint tab can check the
 selected endpoint, run the ecosystem manifest tool, or search a user-selected
 local corpus through `ofxGgmlRag`. Generate it with the openFrameworks projectGenerator using addons
-`ofxGgmlAgents`, `ofxGgmlCore`, `ofxGgmlRag`, and `ofxImGui`.
+`ofxGgmlAgents`, `ofxGgmlRag`, and `ofxImGui`.
 
 ## Agent workflow planning
 
@@ -66,7 +67,6 @@ Hermes handoff template.
 ## Dependencies
 
 - openFrameworks
-- `ofxGgmlCore`
 - `ofxGgmlRag` and `ofxImGui` for the combined example only
 
 ## Validate

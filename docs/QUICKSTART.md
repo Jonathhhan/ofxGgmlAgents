@@ -8,7 +8,6 @@ run the `ofxGgmlAgents` planning example.
 From the openFrameworks `addons` folder:
 
 ```powershell
-git clone https://github.com/Jonathhhan/ofxGgmlCore.git
 git clone https://github.com/Jonathhhan/ofxGgmlAgents.git
 git clone https://github.com/Jonathhhan/ofxGgmlRag.git
 git clone https://github.com/jvcleave/ofxImGui.git
@@ -18,7 +17,6 @@ The planner example also expects `ofxGgmlRag` and `ofxImGui` beside these addons
 
 ```text
 addons/
-  ofxGgmlCore/
   ofxGgmlAgents/
   ofxGgmlRag/
   ofxImGui/
@@ -54,7 +52,6 @@ these addons:
 
 ```text
 ofxGgmlAgents
-ofxGgmlCore
 ofxGgmlRag
 ofxImGui
 ```

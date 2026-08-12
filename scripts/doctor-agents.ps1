@@ -107,12 +107,6 @@ foreach ($tool in @("git", "cmake")) {
 }
 
 $checks += Test-PathCheck `
-	-Path (Join-Path $addonsRoot "ofxGgmlCore") `
-	-Name "ofxGgmlCore sibling" `
-	-MissingDetail "clone beside ofxGgmlAgents" `
-	-Directory
-
-$checks += Test-PathCheck `
 	-Path (Join-Path $addonsRoot "ofxImGui") `
 	-Name "ofxImGui" `
 	-MissingDetail "install beside ofxGgmlAgents before building the planner example" `

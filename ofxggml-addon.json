@@ -2,9 +2,7 @@
     "name":  "ofxGgmlAgents",
     "lane":  "agents",
     "coreBaseline":  "v1.0.1",
-    "requires":  [
-                     "ofxGgmlCore"
-                 ],
+    "requires":  [],
     "owns":  [
                  "tool use",
                  "planning loops",
@@ -34,6 +32,7 @@
                      "cpu",
                      "cuda"
                  ],
+    "inferenceSmokeReport":  ".agents-runtime-smoke.json",
     "releaseReadinessScore":  34,
     "releaseReadinessMax":  34
 }

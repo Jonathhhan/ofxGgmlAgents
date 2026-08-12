@@ -35,12 +35,25 @@ function Assert-FileContains {
 		throw "$Label did not contain expected pattern: $Pattern"
 	}
 }
+function Assert-FileNotContains {
+	param(
+		[string]$Path,
+		[string]$Pattern,
+		[string]$Label
+	)
+
+	$content = Get-Content -LiteralPath $Path -Raw
+	if ($content -match $Pattern) {
+		throw "$Label contained forbidden pattern: $Pattern"
+	}
+}
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $addonRoot = Split-Path -Parent $scriptRoot
 $addonsRoot = Split-Path -Parent $addonRoot
 
 Write-Step "Checking addon skeleton"
 Assert-Path (Join-Path $addonRoot "addon_config.mk") "addon config"
+Assert-FileNotContains (Join-Path $addonRoot "addon_config.mk") "ADDON_DEPENDENCIES.*ofxGgmlCore" "addon config"
 Assert-Path (Join-Path $addonRoot "README.md") "README"
 Assert-Path (Join-Path $addonRoot "LICENSE") "license"
 Assert-Path (Join-Path $addonRoot "docs\QUICKSTART.md") "quickstart docs"
@@ -67,7 +80,6 @@ Assert-Path (Join-Path $addonRoot "src\ofxGgmlAgents\ofxGgmlAgentsUtils.cpp") "u
 Assert-FileContains (Join-Path $addonRoot "src\ofxGgmlAgents\ofxGgmlAgentsUtils.h") "meaningful planning input" "utility header"
 
 Write-Step "Checking dependency layout"
-Assert-Path (Join-Path $addonsRoot "ofxGgmlCore") "sibling ofxGgmlCore addon" -Directory
 Assert-Path (Join-Path $addonsRoot "ofxGgmlRag") "sibling ofxGgmlRag addon for the combined example" -Directory
 Assert-Path (Join-Path $addonsRoot "ofxImGui") "sibling ofxImGui addon for examples" -Directory
 
@@ -75,6 +87,7 @@ Write-Step "Checking example layout"
 $exampleRoot = Join-Path $addonRoot "ofxGgmlAgentsPlannerExample"
 Assert-Path $exampleRoot "root-level smoke example" -Directory
 Assert-Path (Join-Path $exampleRoot "addons.make") "smoke example addons.make"
+Assert-FileNotContains (Join-Path $exampleRoot "addons.make") "(?m)^ofxGgmlCore\s*$" "smoke example addons.make"
 Assert-FileContains (Join-Path $exampleRoot "addons.make") "(?m)^ofxImGui\s*$" "smoke example addons.make"
 Assert-FileContains (Join-Path $exampleRoot "addons.make") "(?m)^ofxGgmlRag\s*$" "smoke example RAG dependency"
 Assert-Path (Join-Path $exampleRoot "src\main.cpp") "smoke example main.cpp"
@@ -162,6 +175,9 @@ if (!$?) {
 }
 $readiness = ($readinessOutput | Out-String) | ConvertFrom-Json
 $addonMetadata = Get-Content -LiteralPath (Join-Path $addonRoot "ofxggml-addon.json") -Raw | ConvertFrom-Json
+if ([string]$addonMetadata.inferenceSmokeReport -ne ".agents-runtime-smoke.json") {
+	throw "ofxggml-addon.json inferenceSmokeReport must point to .agents-runtime-smoke.json."
+}
 if ([int]$addonMetadata.releaseReadinessScore -ne [int]$readiness.Score) {
 	throw "ofxggml-addon.json releaseReadinessScore is $($addonMetadata.releaseReadinessScore), expected $($readiness.Score)."
 }
