@@ -20,6 +20,7 @@ Expected layout:
 addons/
   ofxGgmlCore/
   ofxGgmlAgents/
+  ofxGgmlRag/
   ofxImGui/
 ```
 
@@ -59,11 +60,12 @@ addons.
 `ofxGgmlAgentsPlannerExample` is intentionally narrow in this release:
 
 - root-level openFrameworks example
-- `ofxImGui` dependency declared in `addons.make`
+- `ofxGgmlRag` and `ofxImGui` example dependencies declared in `addons.make`
 - planning request smoke surface with selectable workflow scenarios
 - copyable and loggable planning handoff records
 - explicit companion-tool ownership and out-of-scope runtime work
-- clear future path for local models, tools, memory, and orchestration loops
+- explicit model-backed `get_proven_lanes` and cited `search_local_corpus` loops
+- a user-selected local corpus root that cannot be changed by model output
 
 This release does not promise a complete model-backed agent runtime.
 

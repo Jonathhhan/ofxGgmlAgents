@@ -1,3 +1,4 @@
 ofxGgmlCore
 ofxGgmlAgents
+ofxGgmlRag
 ofxImGui

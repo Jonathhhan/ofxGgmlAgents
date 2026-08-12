@@ -10,15 +10,17 @@ From the openFrameworks `addons` folder:
 ```powershell
 git clone https://github.com/Jonathhhan/ofxGgmlCore.git
 git clone https://github.com/Jonathhhan/ofxGgmlAgents.git
+git clone https://github.com/Jonathhhan/ofxGgmlRag.git
 git clone https://github.com/jvcleave/ofxImGui.git
 ```
 
-The planner example also expects `ofxImGui` beside these addons:
+The planner example also expects `ofxGgmlRag` and `ofxImGui` beside these addons:
 
 ```text
 addons/
   ofxGgmlCore/
   ofxGgmlAgents/
+  ofxGgmlRag/
   ofxImGui/
 ```
 
@@ -53,13 +55,17 @@ these addons:
 ```text
 ofxGgmlAgents
 ofxGgmlCore
+ofxGgmlRag
 ofxImGui
 ```
 
 Keep the project at the addon root, not under a nested `examples/` folder. Build
 and run the generated project. The example lets you switch between planning
-scenarios, copy or log a handoff record, and inspect local endpoint environment
-variables without making network requests.
+scenarios, copy or log a handoff record, inspect local endpoint environment,
+explicitly check the selected CPU/CUDA endpoint, and run a cited search over a
+user-selected local corpus. Network access starts only after the user clicks
+Check or Run and talks only to the selected local model endpoint; browsing the
+planning screens remains offline.
 
 ## 4. Hand off local LLM setup
 
@@ -70,6 +76,10 @@ If a workflow needs a local OpenAI-compatible endpoint, keep server setup in
 OFXGGML_AGENT_LLM_BASE_URL=http://127.0.0.1:8001/v1
 OFXGGML_AGENT_LLM_MODEL=unsloth/GLM-4.7-Flash
 ```
+
+These legacy values configure one shared endpoint with unknown offload. Use the
+CPU/CUDA-specific variables described in `docs/LOCAL_LLM_ENDPOINTS.md` when you
+need actual switching.
 
 See `docs/LOCAL_LLM_ENDPOINTS.md` for the boundary and
 `ofxGgmlLlama/ofxGgmlLlamaCodexLocalExample` for the concrete Codex + llama.cpp

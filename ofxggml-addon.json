@@ -15,6 +15,8 @@
                      "planning-boundary runtime smoke",
                      "Hermes Agent environment detection",
                      "tool orchestration workflow boundary",
+                     "allowlisted local RAG search with cited results",
+                     "selectable CPU/CUDA endpoint profiles with visible chosen backend",
                      "OpenAI-compatible endpoint smoke option",
                      "local coding-agent handoff planning",
                      "copyable planner example handoff records",

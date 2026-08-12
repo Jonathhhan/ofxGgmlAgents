@@ -83,6 +83,40 @@ OFXGGML_AGENT_LLM_BASE_URL=http://127.0.0.1:8001/v1
 OFXGGML_AGENT_LLM_MODEL=unsloth/GLM-4.7-Flash
 ```
 
+The planner example additionally supports two named profiles:
+
+```text
+OFXGGML_AGENT_CPU_LLM_BASE_URL=http://127.0.0.1:8082
+OFXGGML_AGENT_CPU_LLM_MODEL=local-qwen-cpu
+OFXGGML_AGENT_CUDA_LLM_BASE_URL=http://127.0.0.1:8080
+OFXGGML_AGENT_CUDA_LLM_MODEL=local-qwen-cuda
+```
+
+The generic values remain compatibility fallbacks for both profiles. When such
+a shared fallback is active, the example labels its offload as unknown; it does
+not claim that selecting CPU or CUDA changes the underlying server. Configure
+profile-specific URLs for meaningful switching. The profile label is
+configuration evidence, not automatic hardware detection; verify the owning
+`llama-server` command separately (`-GpuLayers 0` for CPU, `-GpuLayers all` for
+CUDA). A CUDA-enabled binary may initialize its CUDA runtime even with zero
+model layers offloaded; that does not turn the CPU profile into GPU inference.
+
+Model generation requests have a finite 120-second timeout. Set
+`OFXGGML_AGENT_LLM_TIMEOUT_SECONDS` to an integer from 1 through 3600 to adjust
+it. Endpoint discovery keeps its shorter five-second timeout.
+
+In the planner example, use `Check selected endpoint` to query the selected
+profile's `/v1/models` route. The check is explicit so browsing the UI remains
+offline. It succeeds only when the endpoint is reachable and advertises the
+configured model alias; it does not fall back from CPU to CUDA or vice versa.
+The result lists the aliases reported by `/v1/models`; after a mismatch the UI
+can explicitly copy the first advertised alias into the selected profile.
+
+Current `llama-server` responses from `/health`, `/v1/models`, and `/props` do
+not report GPU layer offload. Do not infer CPU or CUDA from request timing. The
+selected backend label therefore remains launch-configuration evidence, while
+endpoint reachability and advertised models are separately observed evidence.
+
 Keep text-generation-specific server management in `ofxGgmlLlama`. Agents code
 should treat these values as an already-provisioned provider.
 

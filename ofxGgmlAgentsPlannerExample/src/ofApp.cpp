@@ -52,6 +52,18 @@ namespace {
 		return value.empty() ? "(not set)" : value.c_str();
 	}
 
+	std::size_t modelRequestTimeoutSeconds() {
+		const std::string configured = ofTrim(readEnvironmentValue("OFXGGML_AGENT_LLM_TIMEOUT_SECONDS"));
+		if (configured.empty()) return 120;
+		try {
+			const int value = std::stoi(configured);
+			return static_cast<std::size_t>(ofClamp(value, 1, 3600));
+		} catch (const std::exception &) {
+			ofLogWarning(kLogModule) << "Ignoring invalid OFXGGML_AGENT_LLM_TIMEOUT_SECONDS: " << configured;
+			return 120;
+		}
+	}
+
 	std::string resolveChatEndpoint(const std::string & baseUrl) {
 		std::string endpoint = ofTrim(baseUrl);
 		while (!endpoint.empty() && endpoint.back() == '/') endpoint.pop_back();
@@ -59,6 +71,15 @@ namespace {
 			return endpoint + "/chat/completions";
 		}
 		return endpoint + "/v1/chat/completions";
+	}
+
+	std::string resolveModelsEndpoint(const std::string & baseUrl) {
+		std::string endpoint = ofTrim(baseUrl);
+		while (!endpoint.empty() && endpoint.back() == '/') endpoint.pop_back();
+		if (ofToLower(endpoint).size() >= 3 && ofToLower(endpoint).substr(endpoint.size() - 3) == "/v1") {
+			return endpoint + "/models";
+		}
+		return endpoint + "/v1/models";
 	}
 
 	std::vector<std::string> readProvenLanes(const std::string & path) {
@@ -131,26 +152,69 @@ namespace {
 		request.body = body.dump();
 		request.contentType = "application/json";
 		request.verbose = false;
+		request.timeoutSeconds = modelRequestTimeoutSeconds();
+		if (!apiKey.empty()) request.headers["Authorization"] = "Bearer " + apiKey;
+		ofURLFileLoader loader;
+		return loader.handleRequest(request);
+	}
+
+	ofHttpResponse getJson(const std::string & endpoint, const std::string & apiKey) {
+		ofHttpRequest request;
+		request.url = endpoint;
+		request.method = ofHttpRequest::GET;
+		request.contentType = "application/json";
+		request.verbose = false;
+		request.timeoutSeconds = 5;
 		if (!apiKey.empty()) request.headers["Authorization"] = "Bearer " + apiKey;
 		ofURLFileLoader loader;
 		return loader.handleRequest(request);
 	}
 
 	ofApp::ToolLoopResult executeToolLoop(const std::string & baseUrl, const std::string & model,
-		const std::string & apiKey, const std::string & ecosystemPath) {
+		const std::string & apiKey, const std::string & toolName, const std::string & ecosystemPath,
+		const std::string & ragSourceRoot, const std::string & requestedRagQuery,
+		const std::string & selectedBackend) {
 		ofApp::ToolLoopResult result;
+		result.selectedBackend = ofToLower(ofTrim(selectedBackend));
+		if (result.selectedBackend.empty()) result.selectedBackend = "configured";
+		result.endpointBaseUrl = ofTrim(baseUrl);
+		result.toolName = toolName;
 		const auto started = std::chrono::steady_clock::now();
 		try {
 			if (ofTrim(baseUrl).empty() || ofTrim(model).empty()) throw std::runtime_error("Endpoint base URL and model are required.");
+			const bool useRag = toolName == "search_local_corpus";
+			if (!useRag && toolName != "get_proven_lanes") throw std::runtime_error("Unsupported allowlisted tool: " + toolName);
+			if (useRag && ofTrim(ragSourceRoot).empty()) throw std::runtime_error("Select a local RAG corpus folder before running the tool loop.");
 			const std::string endpoint = resolveChatEndpoint(baseUrl);
-			result.events.push_back("Model request: asking " + model + " to call get_proven_lanes");
+			result.events.push_back("Selected backend: " + result.selectedBackend);
+			result.events.push_back("Endpoint: " + result.endpointBaseUrl);
+			result.events.push_back("Model request: asking " + model + " to call " + toolName);
+			const std::string systemPrompt = useRag
+				? "You must call search_local_corpus with one query argument. Search for the user's topic. After its result, reply with exactly OFXGGML_AGENTS_TOOL_OK and no extra text."
+				: "You must call get_proven_lanes with no arguments. After its result, reply with exactly OFXGGML_AGENTS_TOOL_OK and no extra text.";
+			const std::string userPrompt = useRag
+				? "Use search_local_corpus to find cited local evidence about: " + requestedRagQuery
+				: "Use the available tool to identify the proven model lanes.";
+			ofJson toolDefinition;
+			if (useRag) {
+				ofJson querySchema = {{"type", "string"}, {"description", "The focused search query."}};
+				ofJson parameters = {{"type", "object"}, {"properties", {{"query", querySchema}}},
+					{"required", ofJson::array({"query"})}, {"additionalProperties", false}};
+				toolDefinition = {{"type", "function"}, {"function", {{"name", "search_local_corpus"},
+					{"description", "Search the user-selected local text corpus and return cited excerpts."},
+					{"parameters", parameters}}}};
+			} else {
+				ofJson parameters = {{"type", "object"}, {"properties", ofJson::object()}, {"additionalProperties", false}};
+				toolDefinition = {{"type", "function"}, {"function", {{"name", "get_proven_lanes"},
+					{"description", "Read proven lanes from the canonical ecosystem manifest."}, {"parameters", parameters}}}};
+			}
 			ofJson payload = {
 				{"model", model}, {"temperature", 0}, {"max_tokens", 128}, {"stream", false},
 				{"messages", ofJson::array({
-					{{"role", "system"}, {"content", "You must call get_proven_lanes with no arguments. After its result, reply with exactly OFXGGML_AGENTS_TOOL_OK and no extra text."}},
-					{{"role", "user"}, {"content", "Use the available tool to identify the proven model lanes."}}
+					{{"role", "system"}, {"content", systemPrompt}},
+					{{"role", "user"}, {"content", userPrompt}}
 				})},
-				{"tools", ofJson::array({{{"type", "function"}, {"function", {{"name", "get_proven_lanes"}, {"description", "Read proven lanes from the canonical ecosystem manifest."}, {"parameters", {{"type", "object"}, {"properties", ofJson::object()}, {"additionalProperties", false}}}}}}})},
+				{"tools", ofJson::array({toolDefinition})},
 				{"tool_choice", "required"}
 			};
 			ofHttpResponse first = postJson(endpoint, payload, apiKey);
@@ -158,16 +222,36 @@ namespace {
 			const ofJson firstJson = ofJson::parse(first.data.getText());
 			const ofJson assistantMessage = firstJson.at("choices").at(0).at("message");
 			const NormalizedToolCall toolCall = normalizeToolCall(assistantMessage);
-			if (toolCall.name != "get_proven_lanes") throw std::runtime_error("Model requested non-allowlisted tool: " + toolCall.name);
-			if (!toolCall.arguments.is_object() || !toolCall.arguments.empty()) throw std::runtime_error("get_proven_lanes does not accept arguments.");
+			if (toolCall.name != toolName) throw std::runtime_error("Model requested non-allowlisted tool: " + toolCall.name);
 			result.toolCallEncoding = toolCall.encoding;
-			result.events.push_back("Model requested tool: get_proven_lanes (" + toolCall.encoding + ")");
-			result.provenLanes = readProvenLanes(ecosystemPath);
-			result.events.push_back("Executed read-only tool: get_proven_lanes");
-			result.events.push_back("Returned lanes: " + ofJoinString(result.provenLanes, ", "));
-			ofJson toolResult = {{"proven_lanes", result.provenLanes}};
+			result.events.push_back("Model requested tool: " + toolName + " (" + toolCall.encoding + ")");
+			ofJson toolResult;
+			if (useRag) {
+				if (!toolCall.arguments.is_object() || toolCall.arguments.size() != 1 || !toolCall.arguments.contains("query") || !toolCall.arguments["query"].is_string()) throw std::runtime_error("search_local_corpus requires exactly one string query.");
+				result.ragQuery = ofTrim(toolCall.arguments["query"].get<std::string>());
+				if (result.ragQuery.empty() || result.ragQuery.size() > 512) throw std::runtime_error("search_local_corpus query must contain 1 to 512 characters.");
+				ofxGgmlRagRequest request;
+				request.query = result.ragQuery;
+				request.sourceRoot = ragSourceRoot;
+				ofxGgmlRagRetrievalOptions options;
+				options.search.topK = 3;
+				options.context.maxChars = 3000;
+				const auto retrieval = ofxGgmlRagUtils::retrieveTextCorpus(request, ofxGgmlRagCorpusOptions(), options);
+				if (!retrieval || retrieval.hits.empty()) throw std::runtime_error(retrieval.result.error.empty() ? "Local RAG search returned no cited hits." : retrieval.result.error);
+				result.ragContext = retrieval.context.text;
+				result.ragReferences = retrieval.result.references;
+				toolResult = {{"query", result.ragQuery}, {"context", result.ragContext}, {"references", result.ragReferences}, {"hit_count", retrieval.hits.size()}};
+				result.events.push_back("Executed read-only tool: search_local_corpus");
+				result.events.push_back("Returned cited hits: " + ofToString(retrieval.hits.size()));
+			} else {
+				if (!toolCall.arguments.is_object() || !toolCall.arguments.empty()) throw std::runtime_error("get_proven_lanes does not accept arguments.");
+				result.provenLanes = readProvenLanes(ecosystemPath);
+				toolResult = {{"proven_lanes", result.provenLanes}};
+				result.events.push_back("Executed read-only tool: get_proven_lanes");
+				result.events.push_back("Returned lanes: " + ofJoinString(result.provenLanes, ", "));
+			}
 			payload["messages"].push_back(assistantMessage);
-			ofJson toolMessage = {{"role", "tool"}, {"name", "get_proven_lanes"}, {"content", toolResult.dump()}};
+			ofJson toolMessage = {{"role", "tool"}, {"name", toolName}, {"content", toolResult.dump()}};
 			if (!toolCall.id.empty()) toolMessage["tool_call_id"] = toolCall.id;
 			payload["messages"].push_back(toolMessage);
 			payload.erase("tool_choice");
@@ -188,9 +272,53 @@ namespace {
 	}
 }
 
+ofApp::EndpointCheckResult ofApp::checkEndpointForSmoke(const std::string & baseUrl, const std::string & model,
+	const std::string & apiKey, const std::string & selectedBackend) {
+	EndpointCheckResult result;
+	result.selectedBackend = ofToLower(ofTrim(selectedBackend));
+	if (result.selectedBackend.empty()) result.selectedBackend = "configured";
+	result.endpointBaseUrl = ofTrim(baseUrl);
+	result.requestedModel = ofTrim(model);
+	const auto started = std::chrono::steady_clock::now();
+	try {
+		if (result.endpointBaseUrl.empty() || result.requestedModel.empty()) {
+			throw std::runtime_error("Endpoint base URL and model are required.");
+		}
+		const ofHttpResponse response = getJson(resolveModelsEndpoint(result.endpointBaseUrl), apiKey);
+		result.httpStatus = response.status;
+		if (response.status < 200 || response.status >= 300) {
+			throw std::runtime_error("Model discovery failed (HTTP " + ofToString(response.status) + "): " + response.error);
+		}
+		const ofJson body = ofJson::parse(response.data.getText());
+		if (!body.contains("data") || !body["data"].is_array()) {
+			throw std::runtime_error("Model discovery response did not contain a data array.");
+		}
+		for (const auto & entry : body["data"]) {
+			if (!entry.is_object()) continue;
+			const std::string id = entry.value("id", "");
+			if (!id.empty()) result.advertisedModels.push_back(id);
+		}
+		result.modelAvailable = std::find(result.advertisedModels.begin(), result.advertisedModels.end(), result.requestedModel) != result.advertisedModels.end();
+		if (!result.modelAvailable) {
+			throw std::runtime_error("Endpoint is reachable, but the selected model alias is not advertised.");
+		}
+		result.success = true;
+	} catch (const std::exception & error) {
+		result.error = error.what();
+	}
+	result.elapsedMs = static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started).count());
+	return result;
+}
+
 ofApp::ToolLoopResult ofApp::runToolLoopForSmoke(const std::string & baseUrl, const std::string & model,
-	const std::string & apiKey, const std::string & ecosystemPath) {
-	return executeToolLoop(baseUrl, model, apiKey, ecosystemPath);
+	const std::string & apiKey, const std::string & ecosystemPath, const std::string & selectedBackend) {
+	return executeToolLoop(baseUrl, model, apiKey, "get_proven_lanes", ecosystemPath, "", "", selectedBackend);
+}
+
+ofApp::ToolLoopResult ofApp::runLocalRagToolLoopForSmoke(const std::string & baseUrl, const std::string & model,
+	const std::string & apiKey, const std::string & sourceRoot, const std::string & query,
+	const std::string & selectedBackend) {
+	return executeToolLoop(baseUrl, model, apiKey, "search_local_corpus", "", sourceRoot, query, selectedBackend);
 }
 
 void ofApp::setup() {
@@ -203,12 +331,25 @@ void ofApp::setup() {
 }
 
 void ofApp::update() {
-	if (toolLoopState != ToolLoopState::Running || !toolLoopFuture.valid()) return;
-	if (toolLoopFuture.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready) return;
-	toolLoopResult = toolLoopFuture.get();
-	toolLoopState = toolLoopResult.success ? ToolLoopState::Succeeded : ToolLoopState::Failed;
-	for (const auto & event : toolLoopResult.events) ofLogNotice(kLogModule) << event;
-	ofLogNotice(kLogModule) << "Tool loop elapsed: " << toolLoopResult.elapsedMs << " ms";
+	if (endpointCheckState == EndpointCheckState::Running && endpointCheckFuture.valid()
+		&& endpointCheckFuture.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready) {
+		endpointCheckResult = endpointCheckFuture.get();
+		endpointCheckState = endpointCheckResult.success ? EndpointCheckState::Reachable : EndpointCheckState::Failed;
+		if (endpointCheckResult.success) {
+			ofLogNotice(kLogModule) << "Endpoint ready for " << endpointCheckResult.selectedBackend << " at "
+			                        << endpointCheckResult.endpointBaseUrl << " in " << endpointCheckResult.elapsedMs << " ms";
+		} else {
+			ofLogWarning(kLogModule) << "Endpoint check failed for " << endpointCheckResult.selectedBackend << ": " << endpointCheckResult.error;
+		}
+		refreshHandoffText();
+	}
+	if (toolLoopState == ToolLoopState::Running && toolLoopFuture.valid()
+		&& toolLoopFuture.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready) {
+		toolLoopResult = toolLoopFuture.get();
+		toolLoopState = toolLoopResult.success ? ToolLoopState::Succeeded : ToolLoopState::Failed;
+		for (const auto & event : toolLoopResult.events) ofLogNotice(kLogModule) << event;
+		ofLogNotice(kLogModule) << "Tool loop elapsed: " << toolLoopResult.elapsedMs << " ms";
+	}
 }
 
 void ofApp::draw() {
@@ -345,11 +486,21 @@ void ofApp::refreshHandoffText() {
 	if (scenario.name == "Local LLM endpoint handoff") {
 		const bool endpointConfigured = !endpointBaseUrl.empty() && !endpointModel.empty();
 		stream << "Assistant client: OpenAI-compatible local client\n";
+		stream << "Selected backend profile: " << selectedBackendDisplay() << "\n";
 		stream << "Endpoint configured: " << configuredText(endpointConfigured) << "\n";
 		stream << "Endpoint base URL: " << displayValue(endpointBaseUrl) << "\n";
 		stream << "Model alias: " << displayValue(endpointModel) << "\n";
 		stream << "Provider owner: ofxGgmlLlama\n";
-		stream << "Server health checked: no, this example does not call the provider\n";
+		const char * checkText = endpointCheckState == EndpointCheckState::Idle ? "not checked"
+			: endpointCheckState == EndpointCheckState::Running ? "checking"
+			: endpointCheckState == EndpointCheckState::Reachable ? "ready"
+			: "failed";
+		stream << "Selected endpoint readiness: " << checkText << "\n";
+		if (endpointCheckState == EndpointCheckState::Reachable || endpointCheckState == EndpointCheckState::Failed) {
+			stream << "Endpoint check HTTP status: " << endpointCheckResult.httpStatus << "\n";
+			stream << "Endpoint check elapsed: " << endpointCheckResult.elapsedMs << " ms\n";
+			if (!endpointCheckResult.error.empty()) stream << "Endpoint check error: " << endpointCheckResult.error << "\n";
+		}
 		stream << "API key: " << (endpointApiKeyConfigured ? "configured, value hidden" : "not set") << "\n";
 	}
 	stream << "Companion tools needed: ";
@@ -363,17 +514,51 @@ void ofApp::refreshHandoffText() {
 }
 
 void ofApp::refreshEndpointStatus() {
-	endpointBaseUrl = readEnvironmentValue("OFXGGML_AGENT_LLM_BASE_URL");
-	endpointModel = readEnvironmentValue("OFXGGML_AGENT_LLM_MODEL");
+	const std::string fallbackUrl = readEnvironmentValue("OFXGGML_AGENT_LLM_BASE_URL");
+	const std::string fallbackModel = readEnvironmentValue("OFXGGML_AGENT_LLM_MODEL");
+	std::string cpuUrl = readEnvironmentValue("OFXGGML_AGENT_CPU_LLM_BASE_URL");
+	std::string cpuModel = readEnvironmentValue("OFXGGML_AGENT_CPU_LLM_MODEL");
+	std::string cudaUrl = readEnvironmentValue("OFXGGML_AGENT_CUDA_LLM_BASE_URL");
+	std::string cudaModel = readEnvironmentValue("OFXGGML_AGENT_CUDA_LLM_MODEL");
+	cpuEndpointUsesSharedFallback = cpuUrl.empty() && !fallbackUrl.empty();
+	cudaEndpointUsesSharedFallback = cudaUrl.empty() && !fallbackUrl.empty();
+	if (cpuUrl.empty()) cpuUrl = fallbackUrl.empty() ? "http://127.0.0.1:8082" : fallbackUrl;
+	if (cpuModel.empty()) cpuModel = fallbackModel;
+	if (cudaUrl.empty()) cudaUrl = fallbackUrl.empty() ? "http://127.0.0.1:8080" : fallbackUrl;
+	if (cudaModel.empty()) cudaModel = fallbackModel;
 	endpointApiKey = readEnvironmentValue("OFXGGML_AGENT_LLM_API_KEY");
 	endpointApiKeyConfigured = !endpointApiKey.empty();
 	ecosystemPath = readEnvironmentValue("OFXGGML_AGENT_ECOSYSTEM_PATH");
 	if (ecosystemPath.empty()) ecosystemPath = ofToDataPath("../../../../ofxGgmlWorkflows/ecosystem.yaml", true);
-	std::snprintf(endpointBaseUrlInput.data(), endpointBaseUrlInput.size(), "%s", endpointBaseUrl.c_str());
-	std::snprintf(endpointModelInput.data(), endpointModelInput.size(), "%s", endpointModel.c_str());
+	ragSourceRoot = readEnvironmentValue("OFXGGML_AGENT_RAG_SOURCE_ROOT");
+	std::snprintf(cpuEndpointBaseUrlInput.data(), cpuEndpointBaseUrlInput.size(), "%s", cpuUrl.c_str());
+	std::snprintf(cpuEndpointModelInput.data(), cpuEndpointModelInput.size(), "%s", cpuModel.c_str());
+	std::snprintf(cudaEndpointBaseUrlInput.data(), cudaEndpointBaseUrlInput.size(), "%s", cudaUrl.c_str());
+	std::snprintf(cudaEndpointModelInput.data(), cudaEndpointModelInput.size(), "%s", cudaModel.c_str());
+	endpointBaseUrl = backendMode == BackendMode::Cpu ? cpuEndpointBaseUrlInput.data() : cudaEndpointBaseUrlInput.data();
+	endpointModel = backendMode == BackendMode::Cpu ? cpuEndpointModelInput.data() : cudaEndpointModelInput.data();
+	std::snprintf(ragQueryInput.data(), ragQueryInput.size(), "%s", ragQuery.c_str());
 	if (!scenarios.empty()) {
 		refreshHandoffText();
 	}
+}
+
+bool ofApp::selectedEndpointUsesSharedFallback() const {
+	return backendMode == BackendMode::Cpu ? cpuEndpointUsesSharedFallback : cudaEndpointUsesSharedFallback;
+}
+
+std::string ofApp::selectedBackendKey() const {
+	if (selectedEndpointUsesSharedFallback()) return "shared";
+	return backendMode == BackendMode::Cpu ? "cpu" : "cuda";
+}
+
+std::string ofApp::selectedBackendDisplay() const {
+	if (selectedEndpointUsesSharedFallback()) {
+		return backendMode == BackendMode::Cpu
+			? "CPU profile (shared legacy endpoint; offload unknown)"
+			: "CUDA profile (shared legacy endpoint; offload unknown)";
+	}
+	return backendMode == BackendMode::Cpu ? "CPU (0 GPU layers)" : "CUDA (GPU offload)";
 }
 
 void ofApp::drawScenarioList() {
@@ -445,22 +630,100 @@ void ofApp::drawBoundaryTab() const {
 }
 
 void ofApp::drawEndpointTab() {
-	endpointBaseUrl = endpointBaseUrlInput.data();
-	endpointModel = endpointModelInput.data();
+	const bool requestRunning = endpointCheckState == EndpointCheckState::Running || toolLoopState == ToolLoopState::Running;
+	int selectedBackend = backendMode == BackendMode::Cpu ? 0 : 1;
+	const std::string cpuChoice = cpuEndpointUsesSharedFallback
+		? "CPU profile (shared endpoint; offload unknown)" : "CPU (0 GPU layers)";
+	const std::string cudaChoice = cudaEndpointUsesSharedFallback
+		? "CUDA profile (shared endpoint; offload unknown)" : "CUDA (GPU offload)";
+	const char * backendChoices[] = {cpuChoice.c_str(), cudaChoice.c_str()};
+	bool backendChanged = false;
+	if (requestRunning) ImGui::BeginDisabled();
+	if (ImGui::Combo("Backend profile", &selectedBackend, backendChoices, 2)) {
+		backendMode = selectedBackend == 0 ? BackendMode::Cpu : BackendMode::Cuda;
+		backendChanged = true;
+		toolLoopResult = {};
+		toolLoopState = ToolLoopState::Idle;
+		endpointCheckResult = {};
+		endpointCheckState = EndpointCheckState::Idle;
+	}
+	auto & activeUrlInput = backendMode == BackendMode::Cpu ? cpuEndpointBaseUrlInput : cudaEndpointBaseUrlInput;
+	auto & activeModelInput = backendMode == BackendMode::Cpu ? cpuEndpointModelInput : cudaEndpointModelInput;
+	endpointBaseUrl = activeUrlInput.data();
+	endpointModel = activeModelInput.data();
 	const bool endpointConfigured = !ofTrim(endpointBaseUrl).empty() && !ofTrim(endpointModel).empty();
+	if (requestRunning) ImGui::BeginDisabled();
 	if (ImGui::Button("Refresh environment")) {
+		endpointCheckResult = {};
+		endpointCheckState = EndpointCheckState::Idle;
 		refreshEndpointStatus();
 	}
+	if (requestRunning) ImGui::EndDisabled();
 	ImGui::Spacing();
-	ImGui::InputText("Endpoint base URL", endpointBaseUrlInput.data(), endpointBaseUrlInput.size());
-	ImGui::InputText("Model alias", endpointModelInput.data(), endpointModelInput.size());
-	ImGui::TextWrapped("Manifest: %s", ecosystemPath.c_str());
-	if (toolLoopState == ToolLoopState::Running) ImGui::BeginDisabled();
+	const std::string backendDisplay = selectedBackendDisplay();
+	ImGui::Text("Selected backend: %s", backendDisplay.c_str());
+	ImGui::TextWrapped("Backend evidence: configured profile; llama-server does not report GPU layer offload through /health, /v1/models, or /props.");
+	const bool urlChanged = ImGui::InputText("Endpoint base URL", activeUrlInput.data(), activeUrlInput.size());
+	const bool modelChanged = ImGui::InputText("Model alias", activeModelInput.data(), activeModelInput.size());
+	if (urlChanged || modelChanged) {
+		endpointCheckResult = {};
+		endpointCheckState = EndpointCheckState::Idle;
+	}
+	if (urlChanged) {
+		if (backendMode == BackendMode::Cpu) cpuEndpointUsesSharedFallback = false;
+		else cudaEndpointUsesSharedFallback = false;
+	}
+	endpointBaseUrl = activeUrlInput.data();
+	endpointModel = activeModelInput.data();
+	if (backendChanged || urlChanged || modelChanged) refreshHandoffText();
+	if (requestRunning) ImGui::EndDisabled();
+	int selectedTool = toolMode == ToolMode::EcosystemLanes ? 0 : 1;
+	const char * toolChoices[] = {"Ecosystem lanes", "Local RAG corpus"};
+	if (requestRunning) ImGui::BeginDisabled();
+	if (ImGui::Combo("Allowlisted tool", &selectedTool, toolChoices, 2)) toolMode = selectedTool == 0 ? ToolMode::EcosystemLanes : ToolMode::LocalRagCorpus;
+	if (toolMode == ToolMode::EcosystemLanes) {
+		ImGui::TextWrapped("Manifest: %s", ecosystemPath.c_str());
+	} else {
+		ragQuery = ragQueryInput.data();
+		ImGui::InputText("RAG query", ragQueryInput.data(), ragQueryInput.size());
+		ImGui::TextWrapped("Corpus: %s", displayValue(ragSourceRoot));
+		if (ImGui::Button("Choose corpus folder")) {
+			auto selection = ofSystemLoadDialog("Select local RAG corpus", true, ragSourceRoot);
+			if (selection.bSuccess) ragSourceRoot = selection.getPath();
+		}
+	}
+	if (requestRunning) ImGui::EndDisabled();
+	if (requestRunning) ImGui::BeginDisabled();
+	if (ImGui::Button("Check selected endpoint")) startEndpointCheck();
+	ImGui::SameLine();
 	if (ImGui::Button("Run allowlisted tool loop")) startToolLoop();
-	if (toolLoopState == ToolLoopState::Running) ImGui::EndDisabled();
+	if (requestRunning) ImGui::EndDisabled();
 	ImGui::SameLine();
 	const char * stateText = toolLoopState == ToolLoopState::Idle ? "idle" : toolLoopState == ToolLoopState::Running ? "running" : toolLoopState == ToolLoopState::Succeeded ? "completed" : "failed";
 	ImGui::Text("State: %s", stateText);
+	const char * endpointStateText = endpointCheckState == EndpointCheckState::Idle ? "not checked"
+		: endpointCheckState == EndpointCheckState::Running ? "checking"
+		: endpointCheckState == EndpointCheckState::Reachable ? "ready"
+		: "failed";
+	ImGui::Text("Selected endpoint: %s", endpointStateText);
+	if (endpointCheckState == EndpointCheckState::Reachable || endpointCheckState == EndpointCheckState::Failed) {
+		ImGui::Text("Endpoint check: HTTP %d, %d ms", endpointCheckResult.httpStatus, endpointCheckResult.elapsedMs);
+		ImGui::TextWrapped("Requested model: %s", displayValue(endpointCheckResult.requestedModel));
+		if (!endpointCheckResult.advertisedModels.empty()) {
+			ImGui::TextUnformatted("Advertised models");
+			drawBullets(endpointCheckResult.advertisedModels);
+		}
+		if (!endpointCheckResult.error.empty()) ImGui::TextWrapped("Endpoint error: %s", endpointCheckResult.error.c_str());
+		if (!endpointCheckResult.modelAvailable && !endpointCheckResult.advertisedModels.empty()) {
+			if (ImGui::Button("Use first advertised model")) {
+				std::snprintf(activeModelInput.data(), activeModelInput.size(), "%s", endpointCheckResult.advertisedModels.front().c_str());
+				endpointModel = activeModelInput.data();
+				endpointCheckResult = {};
+				endpointCheckState = EndpointCheckState::Idle;
+				refreshHandoffText();
+			}
+		}
+	}
 	ImGui::Separator();
 	ImGui::TextUnformatted("Endpoint configured");
 	ImGui::TextWrapped("%s", endpointConfigured ? "yes" : "no");
@@ -469,19 +732,49 @@ void ofApp::drawEndpointTab() {
 	ImGui::TextWrapped("%s", endpointApiKeyConfigured ? "(configured, value hidden)" : "(not set)");
 	ImGui::Spacing();
 	ImGui::Text("Elapsed: %d ms", toolLoopResult.elapsedMs);
+	if (!toolLoopResult.selectedBackend.empty()) ImGui::Text("Last executed backend: %s", toolLoopResult.selectedBackend.c_str());
 	for (const auto & event : toolLoopResult.events) ImGui::BulletText("%s", event.c_str());
+	if (!toolLoopResult.ragReferences.empty()) {
+		ImGui::TextWrapped("Executed RAG query: %s", displayValue(toolLoopResult.ragQuery));
+		if (!toolLoopResult.ragContext.empty()) {
+			ImGui::TextUnformatted("Retrieved cited excerpts");
+			ImGui::BeginChild("rag-context", ImVec2(0.0f, 140.0f), true);
+			ImGui::TextWrapped("%s", toolLoopResult.ragContext.c_str());
+			ImGui::EndChild();
+		}
+		ImGui::TextUnformatted("Cited sources");
+		drawBullets(toolLoopResult.ragReferences);
+	}
 	ImGui::Separator();
-	ImGui::TextWrapped("Offline by default: network and tool execution begin only when Run is clicked. This example consumes an already-running endpoint; it never starts or configures the provider.");
+	ImGui::TextWrapped("Offline by default: network access begins only when Check or Run is clicked. This example consumes an already-running endpoint; it never starts or configures the provider.");
+}
+
+void ofApp::startEndpointCheck() {
+	if (endpointCheckState == EndpointCheckState::Running || toolLoopState == ToolLoopState::Running) return;
+	endpointBaseUrl = backendMode == BackendMode::Cpu ? cpuEndpointBaseUrlInput.data() : cudaEndpointBaseUrlInput.data();
+	endpointModel = backendMode == BackendMode::Cpu ? cpuEndpointModelInput.data() : cudaEndpointModelInput.data();
+	endpointCheckResult = {};
+	endpointCheckState = EndpointCheckState::Running;
+	const std::string selectedBackend = selectedBackendKey();
+	ofLogNotice(kLogModule) << "Checking selected " << selectedBackend << " endpoint at " << endpointBaseUrl;
+	endpointCheckFuture = std::async(std::launch::async, checkEndpointForSmoke,
+		endpointBaseUrl, endpointModel, endpointApiKey, selectedBackend);
+	refreshHandoffText();
 }
 
 void ofApp::startToolLoop() {
-	if (toolLoopState == ToolLoopState::Running) return;
-	endpointBaseUrl = endpointBaseUrlInput.data();
-	endpointModel = endpointModelInput.data();
+	if (toolLoopState == ToolLoopState::Running || endpointCheckState == EndpointCheckState::Running) return;
+	endpointBaseUrl = backendMode == BackendMode::Cpu ? cpuEndpointBaseUrlInput.data() : cudaEndpointBaseUrlInput.data();
+	endpointModel = backendMode == BackendMode::Cpu ? cpuEndpointModelInput.data() : cudaEndpointModelInput.data();
 	toolLoopResult = {};
 	toolLoopState = ToolLoopState::Running;
-	ofLogNotice(kLogModule) << "Starting explicit allowlisted get_proven_lanes loop";
-	toolLoopFuture = std::async(std::launch::async, executeToolLoop, endpointBaseUrl, endpointModel, endpointApiKey, ecosystemPath);
+	const std::string selectedTool = toolMode == ToolMode::EcosystemLanes ? "get_proven_lanes" : "search_local_corpus";
+	const std::string selectedBackend = selectedBackendKey();
+	const std::string ragSourceRootSnapshot = ragSourceRoot;
+	const std::string ragQuerySnapshot = ragQueryInput.data();
+	ofLogNotice(kLogModule) << "Starting explicit allowlisted " << selectedTool << " loop on " << selectedBackend;
+	toolLoopFuture = std::async(std::launch::async, executeToolLoop, endpointBaseUrl, endpointModel, endpointApiKey,
+		selectedTool, ecosystemPath, ragSourceRootSnapshot, ragQuerySnapshot, selectedBackend);
 }
 
 void ofApp::logHandoff() const {
