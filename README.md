@@ -136,6 +136,7 @@ bounded retrieved excerpts, and their cited source references.
 The ecosystem-lane tool offers a native file browser for `ecosystem.yaml` and
 shows the executed resource, structured returned lanes, call encoding, final
 model confirmation, errors, and a collapsible trace as distinct evidence.
+Editing any execution input invalidates that result before another run.
 
 ## Boundary
 

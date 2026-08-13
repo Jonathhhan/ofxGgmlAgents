@@ -53,7 +53,9 @@ For `get_proven_lanes`, use `Choose ecosystem manifest` when the canonical
 sibling checkout is not at the default relative path. The selected file is a
 user-owned resource snapshot: model output cannot replace it. The result panel
 shows the exact executed resource path separately from the model confirmation
-and the collapsible execution trace.
+and the collapsible execution trace. Changing the backend profile, endpoint,
+model alias, selected tool, query, or resource clears the previous result so it
+cannot be mistaken for evidence from the new inputs.
 
 The Endpoint tab does nothing until the user clicks `Check selected endpoint`
 or `Run allowlisted tool loop`. The check queries `/v1/models`, requires the

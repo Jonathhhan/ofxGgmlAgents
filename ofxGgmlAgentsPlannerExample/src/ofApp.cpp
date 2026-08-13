@@ -643,8 +643,7 @@ void ofApp::drawEndpointTab() {
 	if (ImGui::Combo("Backend profile", &selectedBackend, backendChoices, 2)) {
 		backendMode = selectedBackend == 0 ? BackendMode::Cpu : BackendMode::Cuda;
 		backendChanged = true;
-		toolLoopResult = {};
-		toolLoopState = ToolLoopState::Idle;
+		invalidateToolLoopResult();
 		endpointCheckResult = {};
 		endpointCheckState = EndpointCheckState::Idle;
 	}
@@ -657,6 +656,7 @@ void ofApp::drawEndpointTab() {
 	if (ImGui::Button("Refresh environment")) {
 		endpointCheckResult = {};
 		endpointCheckState = EndpointCheckState::Idle;
+		invalidateToolLoopResult();
 		refreshEndpointStatus();
 	}
 	if (requestRunning) ImGui::EndDisabled();
@@ -669,6 +669,7 @@ void ofApp::drawEndpointTab() {
 	if (urlChanged || modelChanged) {
 		endpointCheckResult = {};
 		endpointCheckState = EndpointCheckState::Idle;
+		invalidateToolLoopResult();
 	}
 	if (urlChanged) {
 		if (backendMode == BackendMode::Cpu) cpuEndpointUsesSharedFallback = false;
@@ -681,28 +682,31 @@ void ofApp::drawEndpointTab() {
 	int selectedTool = toolMode == ToolMode::EcosystemLanes ? 0 : 1;
 	const char * toolChoices[] = {"Ecosystem lanes", "Local RAG corpus"};
 	if (requestRunning) ImGui::BeginDisabled();
-	if (ImGui::Combo("Allowlisted tool", &selectedTool, toolChoices, 2)) toolMode = selectedTool == 0 ? ToolMode::EcosystemLanes : ToolMode::LocalRagCorpus;
+	if (ImGui::Combo("Allowlisted tool", &selectedTool, toolChoices, 2)) {
+		toolMode = selectedTool == 0 ? ToolMode::EcosystemLanes : ToolMode::LocalRagCorpus;
+		invalidateToolLoopResult();
+	}
 	if (toolMode == ToolMode::EcosystemLanes) {
 		ImGui::TextWrapped("Manifest: %s", ecosystemPath.c_str());
 		if (ImGui::Button("Choose ecosystem manifest")) {
 			auto selection = ofSystemLoadDialog("Select ecosystem.yaml", false, ecosystemPath);
 			if (selection.bSuccess) {
 				ecosystemPath = selection.getPath();
-				toolLoopResult = {};
-				toolLoopState = ToolLoopState::Idle;
+				invalidateToolLoopResult();
 				status = "Selected ecosystem manifest: " + ecosystemPath;
 			}
 		}
 	} else {
+		if (ImGui::InputText("RAG query", ragQueryInput.data(), ragQueryInput.size())) {
+			invalidateToolLoopResult();
+		}
 		ragQuery = ragQueryInput.data();
-		ImGui::InputText("RAG query", ragQueryInput.data(), ragQueryInput.size());
 		ImGui::TextWrapped("Corpus: %s", displayValue(ragSourceRoot));
 		if (ImGui::Button("Choose corpus folder")) {
 			auto selection = ofSystemLoadDialog("Select local RAG corpus", true, ragSourceRoot);
 			if (selection.bSuccess) {
 				ragSourceRoot = selection.getPath();
-				toolLoopResult = {};
-				toolLoopState = ToolLoopState::Idle;
+				invalidateToolLoopResult();
 			}
 		}
 	}
@@ -729,13 +733,16 @@ void ofApp::drawEndpointTab() {
 		}
 		if (!endpointCheckResult.error.empty()) ImGui::TextWrapped("Endpoint error: %s", endpointCheckResult.error.c_str());
 		if (!endpointCheckResult.modelAvailable && !endpointCheckResult.advertisedModels.empty()) {
+			if (requestRunning) ImGui::BeginDisabled();
 			if (ImGui::Button("Use first advertised model")) {
 				std::snprintf(activeModelInput.data(), activeModelInput.size(), "%s", endpointCheckResult.advertisedModels.front().c_str());
 				endpointModel = activeModelInput.data();
 				endpointCheckResult = {};
 				endpointCheckState = EndpointCheckState::Idle;
+				invalidateToolLoopResult();
 				refreshHandoffText();
 			}
+			if (requestRunning) ImGui::EndDisabled();
 		}
 	}
 	ImGui::Separator();
@@ -812,6 +819,12 @@ void ofApp::startToolLoop() {
 	ofLogNotice(kLogModule) << "Starting explicit allowlisted " << selectedTool << " loop on " << selectedBackend;
 	toolLoopFuture = std::async(std::launch::async, executeToolLoop, endpointBaseUrl, endpointModel, endpointApiKey,
 		selectedTool, ecosystemPath, ragSourceRootSnapshot, ragQuerySnapshot, selectedBackend);
+}
+
+void ofApp::invalidateToolLoopResult() {
+	if (toolLoopState == ToolLoopState::Running) return;
+	toolLoopResult = {};
+	toolLoopState = ToolLoopState::Idle;
 }
 
 void ofApp::logHandoff() const {

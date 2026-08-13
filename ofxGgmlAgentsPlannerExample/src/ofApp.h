@@ -74,6 +74,7 @@ private:
 	void drawEndpointTab();
 	void startEndpointCheck();
 	void startToolLoop();
+	void invalidateToolLoopResult();
 	void logHandoff() const;
 	static void drawBullets(const std::vector<std::string> & items);
 
