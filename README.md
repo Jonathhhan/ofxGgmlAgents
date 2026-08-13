@@ -133,6 +133,9 @@ process heuristics.
 
 The local RAG result panel displays the immutable query used by the worker,
 bounded retrieved excerpts, and their cited source references.
+The ecosystem-lane tool offers a native file browser for `ecosystem.yaml` and
+shows the executed resource, structured returned lanes, call encoding, final
+model confirmation, errors, and a collapsible trace as distinct evidence.
 
 ## Boundary
 

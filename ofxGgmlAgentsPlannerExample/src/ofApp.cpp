@@ -179,6 +179,7 @@ namespace {
 		if (result.selectedBackend.empty()) result.selectedBackend = "configured";
 		result.endpointBaseUrl = ofTrim(baseUrl);
 		result.toolName = toolName;
+		result.resourcePath = toolName == "search_local_corpus" ? ragSourceRoot : ecosystemPath;
 		const auto started = std::chrono::steady_clock::now();
 		try {
 			if (ofTrim(baseUrl).empty() || ofTrim(model).empty()) throw std::runtime_error("Endpoint base URL and model are required.");
@@ -683,13 +684,26 @@ void ofApp::drawEndpointTab() {
 	if (ImGui::Combo("Allowlisted tool", &selectedTool, toolChoices, 2)) toolMode = selectedTool == 0 ? ToolMode::EcosystemLanes : ToolMode::LocalRagCorpus;
 	if (toolMode == ToolMode::EcosystemLanes) {
 		ImGui::TextWrapped("Manifest: %s", ecosystemPath.c_str());
+		if (ImGui::Button("Choose ecosystem manifest")) {
+			auto selection = ofSystemLoadDialog("Select ecosystem.yaml", false, ecosystemPath);
+			if (selection.bSuccess) {
+				ecosystemPath = selection.getPath();
+				toolLoopResult = {};
+				toolLoopState = ToolLoopState::Idle;
+				status = "Selected ecosystem manifest: " + ecosystemPath;
+			}
+		}
 	} else {
 		ragQuery = ragQueryInput.data();
 		ImGui::InputText("RAG query", ragQueryInput.data(), ragQueryInput.size());
 		ImGui::TextWrapped("Corpus: %s", displayValue(ragSourceRoot));
 		if (ImGui::Button("Choose corpus folder")) {
 			auto selection = ofSystemLoadDialog("Select local RAG corpus", true, ragSourceRoot);
-			if (selection.bSuccess) ragSourceRoot = selection.getPath();
+			if (selection.bSuccess) {
+				ragSourceRoot = selection.getPath();
+				toolLoopResult = {};
+				toolLoopState = ToolLoopState::Idle;
+			}
 		}
 	}
 	if (requestRunning) ImGui::EndDisabled();
@@ -730,10 +744,33 @@ void ofApp::drawEndpointTab() {
 	ImGui::Spacing();
 	ImGui::TextUnformatted("OFXGGML_AGENT_LLM_API_KEY");
 	ImGui::TextWrapped("%s", endpointApiKeyConfigured ? "(configured, value hidden)" : "(not set)");
-	ImGui::Spacing();
-	ImGui::Text("Elapsed: %d ms", toolLoopResult.elapsedMs);
-	if (!toolLoopResult.selectedBackend.empty()) ImGui::Text("Last executed backend: %s", toolLoopResult.selectedBackend.c_str());
-	for (const auto & event : toolLoopResult.events) ImGui::BulletText("%s", event.c_str());
+	if (toolLoopState != ToolLoopState::Idle) {
+		ImGui::Spacing();
+		ImGui::Separator();
+		ImGui::TextUnformatted("Tool result");
+		if (!toolLoopResult.toolName.empty()) ImGui::Text("Tool: %s", toolLoopResult.toolName.c_str());
+		if (!toolLoopResult.toolCallEncoding.empty()) ImGui::Text("Call encoding: %s", toolLoopResult.toolCallEncoding.c_str());
+		if (!toolLoopResult.selectedBackend.empty()) ImGui::Text("Last executed backend: %s", toolLoopResult.selectedBackend.c_str());
+		if (!toolLoopResult.endpointBaseUrl.empty()) ImGui::TextWrapped("Endpoint: %s", toolLoopResult.endpointBaseUrl.c_str());
+		if (!toolLoopResult.resourcePath.empty()) ImGui::TextWrapped("Resource: %s", toolLoopResult.resourcePath.c_str());
+		ImGui::Text("Elapsed: %d ms", toolLoopResult.elapsedMs);
+		if (!toolLoopResult.error.empty()) {
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.45f, 0.38f, 1.0f));
+			ImGui::TextWrapped("Error: %s", toolLoopResult.error.c_str());
+			ImGui::PopStyleColor();
+		}
+		if (!toolLoopResult.provenLanes.empty()) {
+			ImGui::TextUnformatted("Proven ecosystem lanes");
+			drawBullets(toolLoopResult.provenLanes);
+		}
+		if (!toolLoopResult.finalConfirmation.empty()) {
+			ImGui::TextWrapped("Model confirmation: %s", toolLoopResult.finalConfirmation.c_str());
+		}
+		if (!toolLoopResult.events.empty() && ImGui::TreeNode("Execution trace")) {
+			for (const auto & event : toolLoopResult.events) ImGui::BulletText("%s", event.c_str());
+			ImGui::TreePop();
+		}
+	}
 	if (!toolLoopResult.ragReferences.empty()) {
 		ImGui::TextWrapped("Executed RAG query: %s", displayValue(toolLoopResult.ragQuery));
 		if (!toolLoopResult.ragContext.empty()) {

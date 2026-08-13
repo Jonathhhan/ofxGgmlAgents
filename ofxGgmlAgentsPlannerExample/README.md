@@ -21,6 +21,9 @@ also run one explicit, model-backed, read-only tool loop after the user clicks
   selected/last-executed backend labels, and an explicit readiness check
 - an allowlisted `get_proven_lanes` request, canonical manifest read, returned
   lane list, final `OFXGGML_AGENTS_TOOL_OK`, errors, and elapsed time
+- a file browser for selecting the ecosystem manifest without editing an
+  environment variable, plus a structured result panel that separates the
+  executed resource, returned lanes, model confirmation, errors, and trace
 - an allowlisted `search_local_corpus` request backed directly by `ofxGgmlRag`,
   with a folder browser, model-selected query, cited sources, and bounded context
 - normalization of structured `tool_calls` and JSON tool requests in assistant
@@ -45,6 +48,12 @@ Network requests occur only after `Check selected endpoint` or `Run allowlisted
 tool loop` is clicked. For the local endpoint scenario, the copied handoff
 record includes the configured base URL and model alias while keeping API key
 values hidden.
+
+For `get_proven_lanes`, use `Choose ecosystem manifest` when the canonical
+sibling checkout is not at the default relative path. The selected file is a
+user-owned resource snapshot: model output cannot replace it. The result panel
+shows the exact executed resource path separately from the model confirmation
+and the collapsible execution trace.
 
 The Endpoint tab does nothing until the user clicks `Check selected endpoint`
 or `Run allowlisted tool loop`. The check queries `/v1/models`, requires the

@@ -21,6 +21,7 @@ public:
 		std::string error;
 		std::string selectedBackend;
 		std::string endpointBaseUrl;
+		std::string resourcePath;
 		std::string toolName;
 		std::string toolCallEncoding;
 		std::vector<std::string> provenLanes;
