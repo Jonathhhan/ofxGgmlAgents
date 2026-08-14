@@ -82,20 +82,36 @@ namespace {
 		return endpoint + "/v1/models";
 	}
 
-	std::vector<std::string> readProvenLanes(const std::string & path) {
+	struct CapabilityStatus {
+		std::string lane;
+		std::string capability;
+		std::string status;
+		std::string proof;
+	};
+
+	std::vector<CapabilityStatus> readCapabilityStatuses(const std::string & path) {
 		ofBuffer buffer = ofBufferFromFile(path);
 		if (buffer.size() == 0) throw std::runtime_error("Canonical ecosystem file was not found or was empty: " + path);
-		std::vector<std::string> lanes;
-		std::string currentLane;
+		std::vector<CapabilityStatus> capabilities;
+		CapabilityStatus current;
+		bool inDevelopmentOrder = false;
+		const auto flush = [&capabilities, &current]() {
+			if (!current.lane.empty() && !current.status.empty()) capabilities.push_back(current);
+			current = {};
+		};
 		for (const auto & rawLine : buffer.getLines()) {
 			const std::string line = ofTrim(rawLine);
-			if (line.rfind("lane:", 0) == 0) currentLane = ofTrim(line.substr(5));
-			else if (line == "status: proven" && !currentLane.empty()) {
-				if (std::find(lanes.begin(), lanes.end(), currentLane) == lanes.end()) lanes.push_back(currentLane);
-				currentLane.clear();
-			}
+			if (line == "development_order:") { inDevelopmentOrder = true; continue; }
+			if (!inDevelopmentOrder) continue;
+			if (!rawLine.empty() && rawLine.front() != ' ' && line != "development_order:") break;
+			if (line.rfind("- order:", 0) == 0) flush();
+			else if (line.rfind("lane:", 0) == 0) current.lane = ofTrim(line.substr(5));
+			else if (line.rfind("capability:", 0) == 0) current.capability = ofTrim(line.substr(11));
+			else if (line.rfind("status:", 0) == 0) current.status = ofTrim(line.substr(7));
+			else if (line.rfind("proof:", 0) == 0) current.proof = ofTrim(line.substr(6));
 		}
-		return lanes;
+		flush();
+		return capabilities;
 	}
 
 	struct NormalizedToolCall {
@@ -184,7 +200,7 @@ namespace {
 		try {
 			if (ofTrim(baseUrl).empty() || ofTrim(model).empty()) throw std::runtime_error("Endpoint base URL and model are required.");
 			const bool useRag = toolName == "search_local_corpus";
-			if (!useRag && toolName != "get_proven_lanes") throw std::runtime_error("Unsupported allowlisted tool: " + toolName);
+			if (!useRag && toolName != "get_capability_status") throw std::runtime_error("Unsupported allowlisted tool: " + toolName);
 			if (useRag && ofTrim(ragSourceRoot).empty()) throw std::runtime_error("Select a local RAG corpus folder before running the tool loop.");
 			const std::string endpoint = resolveChatEndpoint(baseUrl);
 			result.events.push_back("Selected backend: " + result.selectedBackend);
@@ -192,10 +208,10 @@ namespace {
 			result.events.push_back("Model request: asking " + model + " to call " + toolName);
 			const std::string systemPrompt = useRag
 				? "You must call search_local_corpus with one query argument. Search for the user's topic. After its result, reply with exactly OFXGGML_AGENTS_TOOL_OK and no extra text."
-				: "You must call get_proven_lanes with no arguments. After its result, reply with exactly OFXGGML_AGENTS_TOOL_OK and no extra text.";
+				: "You must call get_capability_status with no arguments. After its result, reply with exactly OFXGGML_AGENTS_TOOL_OK and no extra text.";
 			const std::string userPrompt = useRag
 				? "Use search_local_corpus to find cited local evidence about: " + requestedRagQuery
-				: "Use the available tool to identify the proven model lanes.";
+				: "Use the available tool to inspect the current capability status of all model lanes.";
 			ofJson toolDefinition;
 			if (useRag) {
 				ofJson querySchema = {{"type", "string"}, {"description", "The focused search query."}};
@@ -206,8 +222,8 @@ namespace {
 					{"parameters", parameters}}}};
 			} else {
 				ofJson parameters = {{"type", "object"}, {"properties", ofJson::object()}, {"additionalProperties", false}};
-				toolDefinition = {{"type", "function"}, {"function", {{"name", "get_proven_lanes"},
-					{"description", "Read proven lanes from the canonical ecosystem manifest."}, {"parameters", parameters}}}};
+				toolDefinition = {{"type", "function"}, {"function", {{"name", "get_capability_status"},
+					{"description", "Read each lane's capability, current status, and proof identifier from the canonical ecosystem manifest."}, {"parameters", parameters}}}};
 			}
 			ofJson payload = {
 				{"model", model}, {"temperature", 0}, {"max_tokens", 128}, {"stream", false},
@@ -245,11 +261,17 @@ namespace {
 				result.events.push_back("Executed read-only tool: search_local_corpus");
 				result.events.push_back("Returned cited hits: " + ofToString(retrieval.hits.size()));
 			} else {
-				if (!toolCall.arguments.is_object() || !toolCall.arguments.empty()) throw std::runtime_error("get_proven_lanes does not accept arguments.");
-				result.provenLanes = readProvenLanes(ecosystemPath);
-				toolResult = {{"proven_lanes", result.provenLanes}};
-				result.events.push_back("Executed read-only tool: get_proven_lanes");
-				result.events.push_back("Returned lanes: " + ofJoinString(result.provenLanes, ", "));
+				if (!toolCall.arguments.is_object() || !toolCall.arguments.empty()) throw std::runtime_error("get_capability_status does not accept arguments.");
+				const auto capabilities = readCapabilityStatuses(ecosystemPath);
+				if (capabilities.empty()) throw std::runtime_error("Canonical ecosystem manifest contains no development-order capability statuses.");
+				toolResult["capabilities"] = ofJson::array();
+				for (const auto & capability : capabilities) {
+					toolResult["capabilities"].push_back({{"lane", capability.lane}, {"capability", capability.capability},
+						{"status", capability.status}, {"proof", capability.proof}});
+					result.capabilityStatuses.push_back(capability.lane + ": " + capability.status + " (" + capability.capability + ")");
+				}
+				result.events.push_back("Executed read-only tool: get_capability_status");
+				result.events.push_back("Returned capability statuses: " + ofToString(capabilities.size()));
 			}
 			payload["messages"].push_back(assistantMessage);
 			ofJson toolMessage = {{"role", "tool"}, {"name", toolName}, {"content", toolResult.dump()}};
@@ -313,7 +335,7 @@ ofApp::EndpointCheckResult ofApp::checkEndpointForSmoke(const std::string & base
 
 ofApp::ToolLoopResult ofApp::runToolLoopForSmoke(const std::string & baseUrl, const std::string & model,
 	const std::string & apiKey, const std::string & ecosystemPath, const std::string & selectedBackend) {
-	return executeToolLoop(baseUrl, model, apiKey, "get_proven_lanes", ecosystemPath, "", "", selectedBackend);
+	return executeToolLoop(baseUrl, model, apiKey, "get_capability_status", ecosystemPath, "", "", selectedBackend);
 }
 
 ofApp::ToolLoopResult ofApp::runLocalRagToolLoopForSmoke(const std::string & baseUrl, const std::string & model,
@@ -766,9 +788,9 @@ void ofApp::drawEndpointTab() {
 			ImGui::TextWrapped("Error: %s", toolLoopResult.error.c_str());
 			ImGui::PopStyleColor();
 		}
-		if (!toolLoopResult.provenLanes.empty()) {
-			ImGui::TextUnformatted("Proven ecosystem lanes");
-			drawBullets(toolLoopResult.provenLanes);
+		if (!toolLoopResult.capabilityStatuses.empty()) {
+			ImGui::TextUnformatted("Ecosystem capability status");
+			drawBullets(toolLoopResult.capabilityStatuses);
 		}
 		if (!toolLoopResult.finalConfirmation.empty()) {
 			ImGui::TextWrapped("Model confirmation: %s", toolLoopResult.finalConfirmation.c_str());
@@ -812,7 +834,7 @@ void ofApp::startToolLoop() {
 	endpointModel = backendMode == BackendMode::Cpu ? cpuEndpointModelInput.data() : cudaEndpointModelInput.data();
 	toolLoopResult = {};
 	toolLoopState = ToolLoopState::Running;
-	const std::string selectedTool = toolMode == ToolMode::EcosystemLanes ? "get_proven_lanes" : "search_local_corpus";
+	const std::string selectedTool = toolMode == ToolMode::EcosystemLanes ? "get_capability_status" : "search_local_corpus";
 	const std::string selectedBackend = selectedBackendKey();
 	const std::string ragSourceRootSnapshot = ragSourceRoot;
 	const std::string ragQuerySnapshot = ragQueryInput.data();

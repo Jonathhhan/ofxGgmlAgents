@@ -73,11 +73,11 @@ try {
 
 	Write-Step "Agents runtime smoke tool-call normalization"
 	$ecosystemFixture = Join-Path ([System.IO.Path]::GetTempPath()) "ofxGgmlAgents-ecosystem-fixture.yaml"
-	Set-Content -LiteralPath $ecosystemFixture -Value "development_order:`n  - lane: proven_lane`n    status: proven`n  - lane: planned_lane`n    status: planned"
+	Set-Content -LiteralPath $ecosystemFixture -Value "development_order:`n  - order: 1`n    lane: active_lane`n    capability: real_local_inference`n    status: verification_required`n    proof: model_backed_smoke`nprogress_policy:"
 	$fixtureCases = @(
-		@{ Name = "structured-tool-calls"; First = @{ choices = @(@{ message = @{ role = "assistant"; content = ""; tool_calls = @(@{ id = "call_1"; type = "function"; function = @{ name = "get_proven_lanes"; arguments = "{}" } }) } }) } },
-		@{ Name = "json-in-content"; First = @{ choices = @(@{ message = @{ role = "assistant"; content = '{"name":"get_proven_lanes","arguments":{}}' } }) } },
-		@{ Name = "xml-in-content"; First = @{ choices = @(@{ message = @{ role = "assistant"; content = '<response><function><name>get_proven_lanes</name><arguments>{}</arguments></function></response>' } }) } }
+		@{ Name = "structured-tool-calls"; First = @{ choices = @(@{ message = @{ role = "assistant"; content = ""; tool_calls = @(@{ id = "call_1"; type = "function"; function = @{ name = "get_capability_status"; arguments = "{}" } }) } }) } },
+		@{ Name = "json-in-content"; First = @{ choices = @(@{ message = @{ role = "assistant"; content = '{"name":"get_capability_status","arguments":{}}' } }) } },
+		@{ Name = "xml-in-content"; First = @{ choices = @(@{ message = @{ role = "assistant"; content = '<response><function><name>get_capability_status</name><arguments>{}</arguments></function></response>' } }) } }
 	)
 	foreach ($fixtureCase in $fixtureCases) {
 		$responseFixture = Join-Path ([System.IO.Path]::GetTempPath()) "ofxGgmlAgents-$($fixtureCase.Name)-fixture.json"

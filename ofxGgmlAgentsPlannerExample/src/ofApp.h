@@ -24,7 +24,7 @@ public:
 		std::string resourcePath;
 		std::string toolName;
 		std::string toolCallEncoding;
-		std::vector<std::string> provenLanes;
+		std::vector<std::string> capabilityStatuses;
 		std::string ragQuery;
 		std::string ragContext;
 		std::vector<std::string> ragReferences;

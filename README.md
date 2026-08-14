@@ -95,7 +95,7 @@ running OpenAI-compatible endpoint:
 scripts\run-agents-runtime-smoke.bat -ServerBaseUrl http://127.0.0.1:11434 -Model qwen2.5-coder:7b -EnableTools -RequireEndpoint -RequireToolExecution -Json -SummaryOnly
 ```
 
-The default allowlisted tool is `get_proven_lanes`; it reads the canonical sibling
+The default allowlisted tool is `get_capability_status`; it reads the canonical sibling
 `ofxGgmlWorkflows/ecosystem.yaml`. The combined openFrameworks example also offers
 `search_local_corpus`, which delegates retrieval and citations to `ofxGgmlRag`.
 The corpus root is selected by the user and is never accepted from model output;
@@ -148,5 +148,5 @@ focused tests.
 
 `ofxGgmlAgentsPlannerExample` provides the interactive counterpart to the
 runtime smoke: its Endpoint tab explicitly checks the selected local endpoint,
-then can run either the read-only `get_proven_lanes` loop or cited
+then can run either the read-only `get_capability_status` loop or cited
 `search_local_corpus` loop while remaining offline until clicked.

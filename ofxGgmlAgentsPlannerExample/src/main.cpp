@@ -37,7 +37,7 @@ int main(int argc, char ** argv) {
 		ofJson output = {
 			{"success", result.success}, {"selected_backend", result.selectedBackend},
 			{"endpoint_base_url", result.endpointBaseUrl}, {"tool", result.toolName},
-			{"tool_call_encoding", result.toolCallEncoding}, {"proven_lanes", result.provenLanes},
+			{"tool_call_encoding", result.toolCallEncoding}, {"capability_statuses", result.capabilityStatuses},
 			{"final_confirmation", result.finalConfirmation}, {"elapsed_ms", result.elapsedMs},
 			{"error", result.error}, {"events", result.events}
 		};
@@ -49,7 +49,7 @@ int main(int argc, char ** argv) {
 		ofJson output = {
 			{"success", result.success}, {"selected_backend", result.selectedBackend},
 			{"endpoint_base_url", result.endpointBaseUrl}, {"tool", result.toolName},
-			{"tool_call_encoding", result.toolCallEncoding}, {"proven_lanes", result.provenLanes},
+			{"tool_call_encoding", result.toolCallEncoding}, {"capability_statuses", result.capabilityStatuses},
 			{"final_confirmation", result.finalConfirmation}, {"elapsed_ms", result.elapsedMs},
 			{"error", result.error}, {"events", result.events}
 		};

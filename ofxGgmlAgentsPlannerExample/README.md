@@ -19,8 +19,9 @@ also run one explicit, model-backed, read-only tool loop after the user clicks
 - editable OpenAI-compatible endpoint and model fields
 - separate CPU and CUDA endpoint profiles, an explicit selector, visible
   selected/last-executed backend labels, and an explicit readiness check
-- an allowlisted `get_proven_lanes` request, canonical manifest read, returned
-  lane list, final `OFXGGML_AGENTS_TOOL_OK`, errors, and elapsed time
+- an allowlisted `get_capability_status` request, canonical manifest read,
+  returned lane/capability/status entries, final `OFXGGML_AGENTS_TOOL_OK`,
+  errors, and elapsed time
 - a file browser for selecting the ecosystem manifest without editing an
   environment variable, plus a structured result panel that separates the
   executed resource, returned lanes, model confirmation, errors, and trace
@@ -49,7 +50,7 @@ tool loop` is clicked. For the local endpoint scenario, the copied handoff
 record includes the configured base URL and model alias while keeping API key
 values hidden.
 
-For `get_proven_lanes`, use `Choose ecosystem manifest` when the canonical
+For `get_capability_status`, use `Choose ecosystem manifest` when the canonical
 sibling checkout is not at the default relative path. The selected file is a
 user-owned resource snapshot: model output cannot replace it. The result panel
 shows the exact executed resource path separately from the model confirmation
@@ -64,7 +65,7 @@ advertised aliases, and errors. When an alias is wrong, `Use first advertised
 model` copies the server's first alias into the selected profile for an explicit
 recheck. The example calls only the already-running endpoint; provider startup
 and downloads remain owned by `ofxGgmlLlama`. The executable
-tools are `get_proven_lanes`, which reads the canonical sibling
+tools are `get_capability_status`, which reads the canonical sibling
 `ofxGgmlWorkflows/ecosystem.yaml`, and `search_local_corpus`, which uses
 `ofxGgmlRag` to return cited local evidence. The user selects the corpus folder;
 the model cannot change that root and may provide only a query of up to 512

@@ -109,7 +109,8 @@ already-started OpenAI-compatible server.
 
 Pass `-EnableTools -RequireEndpoint -RequireToolExecution` to require the
 smallest runtime-capability path: the model requests the allowlisted,
-read-only `get_proven_lanes` tool; the runner reads the canonical sibling
+read-only `get_capability_status` tool; the runner reads each lane's capability,
+current status, and proof identifier from the canonical sibling
 `ofxGgmlWorkflows/ecosystem.yaml`, returns the proven lanes, and requires the
 model to finish with `OFXGGML_AGENTS_TOOL_OK`. Both structured `tool_calls` and
 the JSON-in-assistant-content representation are normalized. No other tool

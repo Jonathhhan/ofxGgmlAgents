@@ -64,7 +64,7 @@ addons.
 - planning request smoke surface with selectable workflow scenarios
 - copyable and loggable planning handoff records
 - explicit companion-tool ownership and out-of-scope runtime work
-- explicit model-backed `get_proven_lanes` and cited `search_local_corpus` loops
+- explicit model-backed `get_capability_status` and cited `search_local_corpus` loops
 - a user-selected local corpus root that cannot be changed by model output
 
 This release does not promise a complete model-backed agent runtime.

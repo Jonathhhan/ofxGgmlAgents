@@ -106,7 +106,7 @@ Assert-FileContains $exampleAppSource "OFXGGML_AGENT_LLM_MODEL" "smoke example e
 Assert-FileContains $exampleAppSource "API key: " "smoke example endpoint handoff"
 Assert-FileContains $exampleAppSource "value hidden" "smoke example endpoint handoff"
 Assert-FileContains $exampleAppSource "Run allowlisted tool loop" "smoke example explicit tool loop"
-Assert-FileContains $exampleAppSource "get_proven_lanes" "smoke example allowlisted tool"
+Assert-FileContains $exampleAppSource "get_capability_status" "smoke example allowlisted tool"
 Assert-FileContains $exampleAppSource "search_local_corpus" "smoke example allowlisted local RAG tool"
 Assert-FileContains $exampleAppSource "Choose corpus folder" "smoke example RAG folder browser"
 Assert-FileContains $exampleAppSource "Backend profile" "smoke example backend selector"

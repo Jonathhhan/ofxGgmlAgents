@@ -200,19 +200,26 @@ function Resolve-EcosystemPath {
 	return Join-Path $addonsRoot "ofxGgmlWorkflows\ecosystem.yaml"
 }
 
-function Get-ProvenLanes {
+function Get-CapabilityStatuses {
 	param([string]$Path)
 	if (!(Test-Path -LiteralPath $Path -PathType Leaf)) { throw "Canonical ecosystem file was not found: $Path" }
-	$lanes = @()
-	$currentLane = ""
+	$capabilities = @()
+	$current = [ordered]@{}
+	$inDevelopmentOrder = $false
 	foreach ($line in (Get-Content -LiteralPath $Path)) {
-		if ($line -match '^\s+lane:\s*(\S+)\s*$') { $currentLane = $Matches[1] }
-		elseif ($line -match '^\s+status:\s*proven\s*$' -and $currentLane) {
-			$lanes += $currentLane
-			$currentLane = ""
-		}
+		if ($line -match '^development_order:\s*$') { $inDevelopmentOrder = $true; continue }
+		if (!$inDevelopmentOrder) { continue }
+		if ($line -match '^\S' -and $line -notmatch '^development_order:') { break }
+		if ($line -match '^\s+-\s+order:\s*\d+\s*$') {
+			if ($current.lane -and $current.status) { $capabilities += [pscustomobject]$current }
+			$current = [ordered]@{}
+		} elseif ($line -match '^\s+lane:\s*(\S+)\s*$') { $current.lane = $Matches[1] }
+		elseif ($line -match '^\s+capability:\s*(\S+)\s*$') { $current.capability = $Matches[1] }
+		elseif ($line -match '^\s+status:\s*(\S+)\s*$') { $current.status = $Matches[1] }
+		elseif ($line -match '^\s+proof:\s*(\S+)\s*$') { $current.proof = $Matches[1] }
 	}
-	return @($lanes | Select-Object -Unique)
+	if ($current.lane -and $current.status) { $capabilities += [pscustomobject]$current }
+	return @($capabilities)
 }
 
 function Get-NormalizedToolCall {
@@ -243,12 +250,12 @@ function Invoke-AgentEndpointSmoke {
 		return [ordered]@{ Passed = $false; ExitCode = 2; Error = "agent endpoint and model alias are required"; SmokeKind = "openai-compatible-chat"; Backend = "openai-compatible"; ModelPath = "<not-configured>"; ElapsedMs = 0; ResponseText = ""; ToolExecutionBacked = $false }
 	}
 	$messages = @(
-		[ordered]@{ role = "system"; content = $(if ($ToolsEnabled) { "You must call get_proven_lanes with no arguments. After its result, reply with exactly OFXGGML_AGENTS_TOOL_OK and no extra text." } else { "Reply with exactly OFXGGML_AGENTS_SMOKE_OK and no extra text." }) },
-		[ordered]@{ role = "user"; content = $(if ($ToolsEnabled) { "Call get_proven_lanes now." } else { $Prompt }) }
+		[ordered]@{ role = "system"; content = $(if ($ToolsEnabled) { "You must call get_capability_status with no arguments. After its result, reply with exactly OFXGGML_AGENTS_TOOL_OK and no extra text." } else { "Reply with exactly OFXGGML_AGENTS_SMOKE_OK and no extra text." }) },
+		[ordered]@{ role = "user"; content = $(if ($ToolsEnabled) { "Call get_capability_status now." } else { $Prompt }) }
 	)
 	$payload = [ordered]@{ model = $Model; messages = $messages; temperature = 0; max_tokens = 128; stream = $false }
 	if ($ToolsEnabled) {
-		$payload.tools = @([ordered]@{ type = "function"; function = [ordered]@{ name = "get_proven_lanes"; description = "Read proven lanes from the canonical ecosystem manifest."; parameters = [ordered]@{ type = "object"; properties = [ordered]@{}; additionalProperties = $false } } })
+		$payload.tools = @([ordered]@{ type = "function"; function = [ordered]@{ name = "get_capability_status"; description = "Read each lane's capability, current status, and proof identifier from the canonical ecosystem manifest."; parameters = [ordered]@{ type = "object"; properties = [ordered]@{}; additionalProperties = $false } } })
 		$payload.tool_choice = "required"
 	}
 	$headers = @{}
@@ -269,10 +276,12 @@ function Invoke-AgentEndpointSmoke {
 			if (!$toolCall) { throw "Model did not request an allowlisted tool" }
 			$toolName = $toolCall.Name
 			$toolEncoding = $toolCall.Encoding
-			if ($toolName -ne "get_proven_lanes") { throw "Model requested non-allowlisted tool: $toolName" }
+			if ($toolName -ne "get_capability_status") { throw "Model requested non-allowlisted tool: $toolName" }
 			$arguments = $toolCall.Arguments | ConvertFrom-Json
-			if (@($arguments.PSObject.Properties).Count -ne 0) { throw "get_proven_lanes does not accept arguments" }
-			$toolResult = [ordered]@{ proven_lanes = @(Get-ProvenLanes -Path $EcosystemPath) } | ConvertTo-Json -Compress
+			if (@($arguments.PSObject.Properties).Count -ne 0) { throw "get_capability_status does not accept arguments" }
+			$capabilities = @(Get-CapabilityStatuses -Path $EcosystemPath)
+			if ($capabilities.Count -eq 0) { throw "Canonical ecosystem manifest contains no development-order capability statuses" }
+			$toolResult = [ordered]@{ capabilities = $capabilities } | ConvertTo-Json -Compress -Depth 5
 			$payload.messages = @($messages) + @($message)
 			$toolMessage = [ordered]@{ role = "tool"; name = $toolName; content = $toolResult }
 			if ($toolCall.Id) { $toolMessage.tool_call_id = $toolCall.Id }
